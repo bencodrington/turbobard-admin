@@ -1,0 +1,16 @@
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+.env
+.env.*
+!.env.example
+docs/evidence/
+.wrangler/
+*.tsbuildinfo
+infra/cloudflare/.terraform/
+infra/cloudflare/*.tfstate
+infra/cloudflare/*.tfstate.*
+infra/cloudflare/*.tfvars
+!infra/cloudflare/example.tfvars
