@@ -2,8 +2,9 @@
 
 Status: source and documentation research complete on 2026-11-01. No deployed
 Firebase project or Cloudflare account was accessed. The deployed collection
-contents, object inventory, IAM grants, current search behavior, and actual
-runtime compatibility remain unverified.
+contents, object inventory, IAM grants, and current search behavior remain
+unverified. Cloudflare's Web Crypto and Google service-account OAuth docs
+support the proposed Worker REST path; no runtime integration spike was run.
 
 ## Previous admin checkout
 
@@ -32,13 +33,18 @@ write approach as a historical reference only.
 The selected deployment is Cloudflare Workers with static assets. The existing
 Turbobard deploys are static-only; their Access protection is an authentication
 pattern, not a backend. Workers use web-standard APIs and document a subset of
-Node APIs. This makes a small `fetch`-based API viable, but does not establish
-compatibility of Firebase Admin SDK or Google client libraries. Use Google REST
-APIs with a server-side service-account credential and Web Crypto token exchange
-after a compatibility spike; keep the private key in a Worker secret and never
-in `VITE_*`, static assets, logs, or API responses. If that spike fails, move
-the API to a supported Google runtime (such as Cloud Run) and retain Cloudflare
-Access in front of it.
+Node APIs. Cloudflare documents RSA PKCS#1 v1.5 signing and PKCS#8 key import in
+Worker Web Crypto; Google documents service-account OAuth JWT exchange and REST
+bearer-token use. That establishes a supported runtime/authentication path for
+a small `fetch`-based Worker API: sign a service-account assertion with Web
+Crypto, exchange it for a short-lived Google access token, then call Firestore
+and Storage REST APIs. Google strongly recommends using a library for JWT
+generation; the exact library and key import flow still need a
+compatibility/security spike. Firebase Admin SDK and Google client-library
+compatibility with Workers is not established. Keep the private key in a Worker
+secret and never in `VITE_*`, static assets, logs, or API responses. If a
+reviewed library cannot run safely, move the API to a supported Google runtime
+(such as Cloud Run) and retain Cloudflare Access in front of it.
 
 Cloudflare Access should protect the exact staging and production admin
 hostnames, with one allow policy for the owner's identity and default-deny
@@ -133,10 +139,12 @@ unresolvable Pack member. Keep malformed rows inspectable and attach warnings.
   `C:\Users\benve\OneDrive\Documents\Dev\turbo-bard-admin\src\routes\+page.server.ts`.
 - [Cloudflare Workers runtime APIs](https://developers.cloudflare.com/workers/runtime-apis/)
 - [Cloudflare Workers Node.js compatibility](https://developers.cloudflare.com/workers/runtime-apis/nodejs/)
+- [Cloudflare Workers Web Crypto support](https://developers.cloudflare.com/workers/runtime-apis/web-crypto/)
 - [Cloudflare Workers limits](https://developers.cloudflare.com/workers/platform/limits/)
 - [Cloudflare Access self-hosted apps](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)
 - Cloudflare Access Terraform applications and policies: `infra/cloudflare/access.tf`.
 - [Firebase Admin SDK setup and supported Node versions](https://firebase.google.com/docs/admin/setup)
+- [Google service-account OAuth 2.0](https://developers.google.com/identity/protocols/oauth2/service-account)
 - [Firestore documents.list REST reference](https://firebase.google.com/docs/firestore/reference/rest/v1/projects.databases.documents/list)
 - [Firestore IAM roles](https://docs.cloud.google.com/iam/docs/roles-permissions/firestore)
 - [Cloud Storage objects.list REST reference](https://docs.cloud.google.com/storage/docs/json_api/v1/objects/list)

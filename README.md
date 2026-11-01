@@ -33,15 +33,18 @@ Before publishing either environment, create a Cloudflare Access Self-hosted
 application for that environment's exact hostname. Protect the full hostname,
 including every path, and add an Allow policy for the owner's identity. Leave
 unmatched identities denied; use the intended identity provider and domain
-session controls. Verify both a page and a future `/api/*` route are denied in
-a private browser session and allowed for the owner. Keep `workers.dev` and
-preview URLs disabled so they cannot bypass the Access hostname. No deployment
-hostname or owner identity is configured in this repository.
+session controls. Verify both a page and a future `/api/*` route are denied to
+an unauthenticated request and allowed for the owner using automated Playwright
+or CLI/API checks. Keep `workers.dev` and preview URLs disabled so they cannot
+bypass the Access hostname. No deployment hostname or owner identity is
+configured in this repository.
 
-The Access applications and owner-only Allow policies are defined as Terraform
-in `infra/cloudflare/`. Supply the account ID, each exact hostname, and owner
-email in a private `.tfvars` file, then review `terraform plan` before applying.
-The Terraform stack does not deploy Workers or configure Google IAM.
+The custom-domain bindings, Access applications, and owner-only Allow policies
+are defined as Terraform in `infra/cloudflare/`. Supply the account ID, zone ID,
+each exact hostname, and owner email in a private `.tfvars` file, then review
+`terraform plan` before applying. Deploy the Workers first so the custom-domain
+bindings can attach to existing Worker services. The Terraform stack does not
+deploy Workers or configure Google IAM.
 
 Worker secrets and Google credentials must be configured with Cloudflare's
 secret mechanism after R2's integration spike and least-privilege grants are

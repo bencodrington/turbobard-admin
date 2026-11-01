@@ -4,6 +4,12 @@ variable "account_id" {
   nullable    = false
 }
 
+variable "zone_id" {
+  description = "Cloudflare zone containing the two admin hostnames."
+  type        = string
+  nullable    = false
+}
+
 variable "staging_hostname" {
   description = "Exact public hostname for the staging Worker."
   type        = string
