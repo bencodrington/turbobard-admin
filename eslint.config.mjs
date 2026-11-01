@@ -9,6 +9,7 @@ export default tseslint.config(
   {
     ignores: [
       'dist',
+      '.wrangler',
       'coverage',
       'playwright-report',
       'test-results',

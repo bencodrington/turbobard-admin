@@ -63,6 +63,7 @@ values. `GET /api/catalog?collection=tracks|packs` returns at most 250
 documents per page, raw Firestore fields, decoded fields, per-record validation
 warnings, and an opaque continuation token. The browser continues via a
 “Load more” action, and failed or partial collections remain visible as such.
+The Worker uses `jose` to create the service-account assertion with Web Crypto.
 
 The API is read-only and uses Firestore's authoritative documents rather than
 the legacy search projection. It does not read Storage or change the Turbobard

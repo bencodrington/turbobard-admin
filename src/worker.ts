@@ -1,4 +1,5 @@
 import { catalogItemFromDocument, type CatalogCollection } from './catalog';
+import { importPKCS8, SignJWT } from 'jose';
 
 interface Env {
   ASSETS: { fetch(request: Request): Promise<Response> };
@@ -47,41 +48,19 @@ function decodeJson(value: string): unknown {
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
-function pemBytes(pem: string): ArrayBuffer {
-  const encoded = pem
-    .replace(/\\n/g, '\n')
-    .replace(/-----[^-]+-----/g, '')
-    .replace(/\s/g, '');
-  const binary = atob(encoded);
-  const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
-  return bytes.buffer as ArrayBuffer;
-}
-
 async function createAssertion(
   email: string,
   privatePem: string,
 ): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
-  const unsigned = `${encodeJson({ alg: 'RS256', typ: 'JWT' })}.${encodeJson({
-    iss: email,
-    scope: firestoreScope,
-    aud: tokenEndpoint,
-    iat: now,
-    exp: now + 3600,
-  })}`;
-  const key = await crypto.subtle.importKey(
-    'pkcs8',
-    pemBytes(privatePem),
-    { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
-    false,
-    ['sign'],
-  );
-  const signature = await crypto.subtle.sign(
-    'RSASSA-PKCS1-v1_5',
-    key,
-    new TextEncoder().encode(unsigned),
-  );
-  return `${unsigned}.${encodeBase64Url(new Uint8Array(signature))}`;
+  const key = await importPKCS8(privatePem.replace(/\\n/g, '\n'), 'RS256');
+  return new SignJWT({ scope: firestoreScope })
+    .setProtectedHeader({ alg: 'RS256', typ: 'JWT' })
+    .setIssuer(email)
+    .setAudience(tokenEndpoint)
+    .setIssuedAt(now)
+    .setExpirationTime(now + 3600)
+    .sign(key);
 }
 
 async function getAccessToken(env: Env): Promise<string> {

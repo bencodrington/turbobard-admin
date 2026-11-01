@@ -106,6 +106,18 @@ invalidation. Reads of authoritative `tracks`/`packs` documents therefore need
 not match search projection visibility at every instant. No deployed parity or
 cache behavior has been verified.
 
+### R3 local Worker compatibility spike (2026-11-01)
+
+The catalog API uses `jose` for RS256 service-account assertions and PKCS#8
+private-key import. `jose` documents Cloudflare Workers support. A local
+Wrangler Worker invocation with a throwaway generated key reached Google's
+OAuth token endpoint and returned the expected `authentication_failed` response
+for the intentionally invalid test identity; this confirms the local Worker
+runtime can import the key, sign the assertion, and make the token request. It
+does not verify a real service-account identity, Google IAM grants, Firestore
+permissions, or deployed behavior. No production credentials or catalog data
+were used.
+
 ## Proposed private API contract
 
 - `GET /api/health`: returns only service and integration readiness; never
