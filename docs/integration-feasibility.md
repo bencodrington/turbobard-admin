@@ -3,8 +3,10 @@
 Status: source and documentation research complete on 2026-11-01. No deployed
 Firebase project or Cloudflare account was accessed. The deployed collection
 contents, object inventory, IAM grants, and current search behavior remain
-unverified. Cloudflare's Web Crypto and Google service-account OAuth docs
-support the proposed Worker REST path; no runtime integration spike was run.
+unverified. `jose` supports the proposed Worker REST path, and a local
+compatibility spike verified the PKCS#8/RS256 request path. Real service-account
+authentication, IAM grants, Firestore access, and deployed behavior remain
+unverified.
 
 ## Previous admin checkout
 
