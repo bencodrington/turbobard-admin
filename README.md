@@ -47,9 +47,28 @@ bindings can attach to existing Worker services. The Terraform stack does not
 deploy Workers or configure Google IAM.
 
 Worker secrets and Google credentials must be configured with Cloudflare's
-secret mechanism after R2's integration spike and least-privilege grants are
-approved. Never put credentials in `VITE_*` variables or client assets. Live
+secret mechanism after the integration approach and least-privilege grants are
+reviewed. Never put credentials in `VITE_*` variables or client assets. Live
 database and storage access is not configured by these files.
+
+The read-only catalog API reads Firestore's `tracks` and `packs` collections
+through the Firestore REST API. Configure `GOOGLE_PROJECT_ID`,
+`GOOGLE_CLIENT_EMAIL`, and `GOOGLE_PRIVATE_KEY` as Worker-side bindings for each
+environment. Store the service-account private key with `wrangler secret put`
+and grant that account only Firestore entity get/list access. The Worker uses
+the Firestore `datastore` OAuth scope; IAM still limits what the account can
+read. No credentials belong in the static assets or browser configuration.
+`GET /api/health` reports whether the bindings exist, without returning their
+values. `GET /api/catalog?collection=tracks|packs` returns at most 250
+documents per page, raw Firestore fields, decoded fields, per-record validation
+warnings, and an opaque continuation token. The browser continues via a
+“Load more” action, and failed or partial collections remain visible as such.
+
+The API is read-only and uses Firestore's authoritative documents rather than
+the legacy search projection. It does not read Storage or change the Turbobard
+schema. A missing Worker binding or insufficient IAM grant is reported as an
+integration error; live access still requires owner-only Access policy and
+approved Google IAM configuration.
 
 ## Project records
 
