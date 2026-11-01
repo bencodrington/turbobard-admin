@@ -32,7 +32,10 @@ function mockCatalog({
       if (collection === failedCollection) {
         return Response.json({ error: 'permission_denied' }, { status: 502 });
       }
-      const items = collection === 'tracks' ? tracks : packs;
+      const items =
+        collection === 'tracks'
+          ? tracks.map((item) => ({ ...item, collection: 'tracks' }))
+          : packs.map((item) => ({ ...item, collection: 'packs' }));
       return Response.json({
         items,
         nextPageToken: incomplete ? 'resume-page' : null,
@@ -134,5 +137,32 @@ describe('catalog browsing', () => {
     expect(
       screen.getByRole('button', { name: 'Load more Sounds' }),
     ).toBeInTheDocument();
+  });
+
+  it('flags Pack members missing from a complete Sound catalog and filters problems', async () => {
+    mockCatalog({
+      packs: [
+        record('orphan-pack', {
+          name: 'Orphan pack',
+          tags: ['weather'],
+          tracks: [{ id: 'missing-sound' }],
+        }),
+      ],
+    });
+
+    render(<App />);
+    expect(await screen.findByText('Orphan pack')).toBeInTheDocument();
+    expect(
+      screen.getByText(/references missing Sound "missing-sound"/),
+    ).toBeInTheDocument();
+
+    fireEvent.change(screen.getByLabelText('Problems'), {
+      target: { value: 'problems' },
+    });
+    expect(screen.getByText('Orphan pack')).toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText('Problems'), {
+      target: { value: 'clear' },
+    });
+    expect(screen.queryByText('Orphan pack')).not.toBeInTheDocument();
   });
 });

@@ -79,10 +79,25 @@ function warningsFor(
     }
     const hasFileName = 'fileName' in fields;
     const hasSamples = 'samples' in fields;
-    if (hasFileName && typeof fields.fileName !== 'string')
+    if (hasFileName && typeof fields.fileName !== 'string') {
       warnings.push('Filename must be text.');
-    if (hasSamples && !stringArray(fields.samples))
+    } else if (
+      hasFileName &&
+      typeof fields.fileName === 'string' &&
+      !fields.fileName.trim()
+    ) {
+      warnings.push('Filename must not be empty.');
+    }
+    if (hasSamples && !stringArray(fields.samples)) {
       warnings.push('Samples must be a list of text values.');
+    } else if (
+      hasSamples &&
+      stringArray(fields.samples) &&
+      (fields.samples.length === 0 ||
+        fields.samples.some((sample) => !sample.trim()))
+    ) {
+      warnings.push('Samples must include at least one non-empty filename.');
+    }
     if (!hasFileName && !hasSamples)
       warnings.push('Sound has no filename or sample list.');
     if (hasFileName && hasSamples)

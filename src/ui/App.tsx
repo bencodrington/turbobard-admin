@@ -77,6 +77,34 @@ function typeLabel(type: ItemType): string {
   return type === 'loop' ? 'Loop' : 'Pack';
 }
 
+function warningsForItem(
+  item: CatalogItem,
+  collections: Record<CatalogCollection, CollectionState>,
+): string[] {
+  const warnings = [...item.warnings];
+  if (
+    item.collection !== 'packs' ||
+    !collections.tracks.complete ||
+    collections.tracks.error
+  ) {
+    return warnings;
+  }
+
+  const soundIds = new Set(collections.tracks.items.map((sound) => sound.id));
+  if (!Array.isArray(item.fields.tracks)) return warnings;
+  for (const [index, member] of item.fields.tracks.entries()) {
+    if (!member || typeof member !== 'object' || Array.isArray(member))
+      continue;
+    const id = (member as Record<string, unknown>).id;
+    if (typeof id === 'string' && !soundIds.has(id)) {
+      warnings.push(
+        `Pack member ${index + 1} references missing Sound "${id}".`,
+      );
+    }
+  }
+  return warnings;
+}
+
 async function loadCollectionPage(
   collection: CatalogCollection,
   pageToken?: string | null,
@@ -174,7 +202,7 @@ export default function App() {
     const matchesType = type === 'all' || itemType(item) === type;
     const matchesTag = !tag || tagsOf(item).includes(tag);
     const matchesAuthor = !author || authorOf(item) === author;
-    const hasProblems = item.warnings.length > 0;
+    const hasProblems = warningsForItem(item, collections).length > 0;
     const matchesProblems =
       problemFilter === 'all' ||
       (problemFilter === 'problems' && hasProblems) ||
@@ -329,16 +357,17 @@ export default function App() {
           <tbody>
             {visibleItems.map((item) => {
               const kind = itemType(item);
+              const warnings = warningsForItem(item, collections);
               return (
                 <tr key={`${item.collection}/${item.id}`}>
                   <td>
                     <strong>{titleOf(item)}</strong>
-                    {item.warnings.length > 0 && (
+                    {warnings.length > 0 && (
                       <ul
                         className="record-warnings"
                         aria-label={`Problems with ${item.id}`}
                       >
-                        {item.warnings.map((warning, index) => (
+                        {warnings.map((warning, index) => (
                           <li key={`${warning}-${index}`}>{warning}</li>
                         ))}
                       </ul>
@@ -361,7 +390,7 @@ export default function App() {
                     )}
                   </td>
                   <td>
-                    {item.warnings.length > 0 ? (
+                    {warnings.length > 0 ? (
                       <span className="problem-label">Problems</span>
                     ) : (
                       'OK'
