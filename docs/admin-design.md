@@ -181,3 +181,16 @@ details. The read-only release does not depend on resolving them.
 
 No production endpoints were accessed and no database or storage was changed
 during this investigation.
+
+### Additional previous-admin source finding (2026-11-01)
+
+The prior dashboard checkout is at
+`C:\Users\benve\OneDrive\Documents\Dev\turbo-bard-admin`. Its
+`src/routes/AddTrack.svelte` documents manual upload of generated files through
+the Cloud Console, followed by `firestore-import` of `tracks.json` with a
+service-account key file. `src/routes/+page.server.ts` uses `fluent-ffmpeg` and
+`ffmpeg-static` to create MP3 and WebM files in `static/output/`, temporarily
+writing the source file to `static/`. The old app does not contain a Firestore
+read API or automatic Cloud Storage upload. This is a local preparation/manual
+publication reference only; it does not establish a safe hosted pipeline or
+deployed behavior. See `docs/integration-feasibility.md` for the R2 implications.
