@@ -69,6 +69,42 @@ afterEach(() => {
 });
 
 describe('catalog browsing', () => {
+  it('links duplicate tags to Sound and Pack details without changing their order', async () => {
+    mockCatalog({
+      tracks: [
+        record('rain', {
+          name: 'Rain',
+          tags: ['Storm', 'Storm', 'forest'],
+          fileName: 'rain',
+        }),
+      ],
+      packs: [
+        record('weather', {
+          name: 'Weather',
+          tags: [' storm ', 'forest'],
+          tracks: [],
+        }),
+      ],
+    });
+    render(<App />);
+    const report = await screen.findByRole('region', {
+      name: 'Duplicate-tag report',
+    });
+    expect(within(report).getByText(/appears 2 times in/)).toBeInTheDocument();
+    expect(within(report).getByText('" storm "')).toBeInTheDocument();
+    expect(
+      within(report).queryByText(/"forest" appears/),
+    ).not.toBeInTheDocument();
+    fireEvent.click(
+      within(report).getAllByRole('button', {
+        name: /Weather \(packs\/weather\)/,
+      })[0],
+    );
+    expect(screen.getByRole('dialog')).toHaveTextContent('Weather');
+    expect(screen.getByRole('dialog')).toHaveTextContent(' storm , forest');
+    expect(screen.getByRole('dialog')).toHaveTextContent('" storm "');
+  });
+
   it('refreshes the Sound catalog before a health scan', async () => {
     let soundLoads = 0;
     const checked: string[] = [];

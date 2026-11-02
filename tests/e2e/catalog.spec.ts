@@ -99,6 +99,130 @@ test('catalog search, filters, malformed records, and partial state', async ({
   await page.screenshot({ path: capture, fullPage: true });
 });
 
+test('duplicate-tag report loads remaining pages and links affected entries', async ({
+  page,
+}) => {
+  await page.route('**/api/catalog?**', async (route) => {
+    const url = new URL(route.request().url());
+    const collection = url.searchParams.get('collection');
+    const next = url.searchParams.has('pageToken');
+    await route.fulfill({
+      json: {
+        items:
+          collection === 'packs'
+            ? [
+                {
+                  id: 'storm-pack',
+                  collection: 'packs',
+                  fields: { name: 'Storm Pack', tags: [' WIND '], tracks: [] },
+                  rawFields: {},
+                  warnings: [],
+                },
+              ]
+            : next
+              ? [
+                  {
+                    id: 'wind',
+                    collection: 'tracks',
+                    fields: { name: 'Wind', tags: ['wind'], fileName: 'wind' },
+                    rawFields: {},
+                    warnings: [],
+                  },
+                ]
+              : [
+                  {
+                    id: 'rain',
+                    collection: 'tracks',
+                    fields: {
+                      name: 'Rain',
+                      tags: ['Wind', 'Wind'],
+                      fileName: 'rain',
+                    },
+                    rawFields: {},
+                    warnings: [],
+                  },
+                ],
+        nextPageToken: collection === 'tracks' && !next ? 'next' : null,
+        complete: collection !== 'tracks' || next,
+        scannedAt: '2026-11-02T12:00:00Z',
+      },
+    });
+  });
+  await page.goto('/');
+  const report = page.getByRole('region', { name: 'Duplicate-tag report' });
+  await expect(report.getByText(/Partial report/)).toBeVisible();
+  await expect(report.getByText(/"Wind" appears 2 times/)).toBeVisible();
+  await report.getByRole('button', { name: 'Load full catalog' }).click();
+  await expect(
+    report.getByText(/Report covers all loaded Sounds and Packs/),
+  ).toBeVisible();
+  await expect(report.getByText('"wind"', { exact: true })).toBeVisible();
+  const capture = resolve(
+    process.cwd(),
+    'docs/evidence/duplicate-tag-report.png',
+  );
+  await mkdir(dirname(capture), { recursive: true });
+  await page.screenshot({ path: capture, fullPage: true });
+  await report.getByRole('button', { name: 'Wind (tracks/wind)' }).click();
+  await expect(page.getByRole('dialog')).toContainText('Wind');
+});
+
+test('duplicate-tag report stays partial after a page failure and can retry', async ({
+  page,
+}) => {
+  let pageLoads = 0;
+  await page.route('**/api/catalog?**', async (route) => {
+    const url = new URL(route.request().url());
+    const collection = url.searchParams.get('collection');
+    const next = url.searchParams.has('pageToken');
+    if (collection === 'tracks' && next && ++pageLoads === 1) {
+      await route.fulfill({ status: 504, json: { error: 'upstream_timeout' } });
+      return;
+    }
+    await route.fulfill({
+      json: {
+        items:
+          collection === 'packs'
+            ? []
+            : next
+              ? [
+                  {
+                    id: 'wind',
+                    collection: 'tracks',
+                    fields: { name: 'Wind', tags: ['wind'] },
+                    rawFields: {},
+                    warnings: [],
+                  },
+                ]
+              : [
+                  {
+                    id: 'rain',
+                    collection: 'tracks',
+                    fields: { name: 'Rain', tags: ['Wind'] },
+                    rawFields: {},
+                    warnings: [],
+                  },
+                ],
+        nextPageToken: collection === 'tracks' && !next ? 'next' : null,
+        complete: collection !== 'tracks' || next,
+        scannedAt: '2026-11-02T12:00:00Z',
+      },
+    });
+  });
+  await page.goto('/');
+  const report = page.getByRole('region', { name: 'Duplicate-tag report' });
+  await report.getByRole('button', { name: 'Load full catalog' }).click();
+  await expect(report.getByText(/Partial report/)).toBeVisible();
+  await expect(page.getByRole('alert')).toContainText('upstream_timeout');
+  await expect(report.getByText('"wind"', { exact: true })).toHaveCount(0);
+  await report.getByRole('button', { name: 'Load full catalog' }).click();
+  await expect(
+    report.getByText(/Report covers all loaded Sounds and Packs/),
+  ).toBeVisible();
+  await expect(report.getByText('"wind"', { exact: true })).toBeVisible();
+  expect(pageLoads).toBe(2);
+});
+
 test('Sound and Pack detail supports references and individual One-shot playback', async ({
   page,
 }) => {
