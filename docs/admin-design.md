@@ -1,5 +1,31 @@
 # Turbobard admin design interview
 
+## G3 documentation boundary (2026-11-02)
+
+Keep replacement-publication requirements and implementation work in this admin
+repository separate from how the rebuilt player handles saved Environments.
+When a behavior requires changes in both repositories, describe the proposed
+player changes in a clearly labeled, separate section for the owner to address
+in `bencodrington/turbobard`. Do not treat approval of admin design or tickets
+as approval to implement or mutate data in either repository.
+
+## G3 approved design (2026-11-02)
+
+The owner approved the [replacement propagation design](admin-replacement-propagation.md)
+and its follow-on ticket split. Existing audio names are overwritten with
+temporary recovery copies during Apply, followed by verification and removal
+of those copies. New One-shot variations get new names; removed variations
+leave stored files in place. A separate proposed Turbobard change refreshes
+only the opened Environment's audio references and preserves its saved settings
+and current playback. HTTP and HTTPS saves refresh independently when opened.
+
+Because the owner accepted cache delay and immediate Play from saved references,
+reopen, refresh, and explicit reload offer best-effort delivery rather than an
+immediate new-byte guarantee. The unavailable-replacement edge case is outside
+this design at the owner's direction. See [ADR-0004](adr/0004-overwrite-audio-with-bounded-recovery.md).
+Approval covers design and tickets only; production mutations require separate
+impact preview, Apply, and owner confirmation.
+
 ## G1 update (2026-11-02)
 
 The owner approved the [safe catalog write design](admin-safe-writes.md).
