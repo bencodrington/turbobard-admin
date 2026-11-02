@@ -1,6 +1,17 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import App from './App';
+
+const originalClipboard = Object.getOwnPropertyDescriptor(
+  navigator,
+  'clipboard',
+);
 
 const record = (
   id: string,
@@ -49,6 +60,11 @@ function mockCatalog({
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  if (originalClipboard) {
+    Object.defineProperty(navigator, 'clipboard', originalClipboard);
+  } else {
+    Reflect.deleteProperty(navigator, 'clipboard');
+  }
 });
 
 describe('catalog browsing', () => {
@@ -164,5 +180,73 @@ describe('catalog browsing', () => {
       target: { value: 'clear' },
     });
     expect(screen.queryByText('Orphan pack')).not.toBeInTheDocument();
+  });
+
+  it('inspects Sounds and Packs with copyable JSON, references, and individual playback', async () => {
+    mockCatalog({
+      tracks: [
+        record('horn-shot', {
+          name: 'War horn',
+          tags: ['battle'],
+          source: {
+            author: 'Northwind Audio',
+            urls: ['https://northwind.example/audio'],
+          },
+          samples: ['horn-a', 'horn-b'],
+          minSecondsBetween: 4,
+          maxSecondsBetween: 8,
+          extraField: { preserved: true },
+          id: 'unknown-id-field',
+          collection: 'unknown-collection-field',
+        }),
+      ],
+      packs: [
+        record('battle-pack', {
+          name: 'Battle kit',
+          tags: ['battle'],
+          tracks: [
+            {
+              id: 'horn-shot',
+              volume: 0.7,
+              oneShotConfig: { minSecondsBetween: 2, maxSecondsBetween: 5 },
+            },
+          ],
+        }),
+      ],
+    });
+
+    const { container } = render(<App />);
+    fireEvent.click(await screen.findByRole('button', { name: 'War horn' }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Northwind Audio');
+    expect(
+      screen.getByRole('link', { name: 'https://northwind.example/audio' }),
+    ).toHaveAttribute('href', 'https://northwind.example/audio');
+    expect(screen.getByText('4 seconds')).toBeInTheDocument();
+    expect(screen.getByText('8 seconds')).toBeInTheDocument();
+    expect(screen.getByText(/"extraField": \{/)).toBeInTheDocument();
+    expect(container.querySelectorAll('audio')).toHaveLength(2);
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: { writeText },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Copy JSON' }));
+    expect(await screen.findByText('JSON copied.')).toBeInTheDocument();
+    const copied = JSON.parse(writeText.mock.calls[0][0] as string) as {
+      document: { id: string; collection: string };
+      fields: Record<string, unknown>;
+    };
+    expect(copied.document).toEqual({ id: 'horn-shot', collection: 'tracks' });
+    expect(copied.fields.id).toBe('unknown-id-field');
+    expect(copied.fields.collection).toBe('unknown-collection-field');
+    expect(copied.fields.extraField).toEqual({ preserved: true });
+    fireEvent.click(
+      within(screen.getByRole('dialog')).getByRole('button', {
+        name: /Battle kit/,
+      }),
+    );
+    expect(screen.getByRole('dialog')).toHaveTextContent('Sounds in this Pack');
+    expect(screen.getByText(/Volume: 0.7/)).toBeInTheDocument();
+    expect(container.querySelectorAll('audio')).toHaveLength(2);
   });
 });
