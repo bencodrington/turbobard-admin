@@ -35,5 +35,9 @@ Original audio supplied as the starting point for preparing a Sound.
 **Prepared audio**:
 Encoded audio produced from source audio and ready for review before publication.
 
+**Audio replacement**:
+Prepared audio that supersedes the playable audio of an existing Sound while
+preserving that Sound's identity.
+
 **Audio draft**:
 A Sound and its prepared audio assembled for review before being added to the Sound catalog.
