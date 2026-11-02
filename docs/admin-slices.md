@@ -1,8 +1,12 @@
 # Approved Turbobard admin slices
 
+G1 was refined on 2026-11-02 in [the safe-write design](admin-safe-writes.md).
+Its approved limits supersede the earlier history, search-verification, and
+non-production-drill requirements below. The other slice dependencies remain.
+
 Status: approved for ticket conversion on 2026-11-01. Track tickets and dependencies
 in the [GitHub map issue](https://github.com/bencodrington/turbobard-admin/issues/1).
-Published and verified: 18 native sub-issues and 30 native dependency links.
+Published and verified: 21 native sub-issues and 38 native dependency links.
 No implementation or production mutation was performed as part of ticket conversion.
 Requirements and source findings are in [the interview record](admin-design.md); terminology is in
 [the glossary](../GLOSSARY.md).

@@ -1,5 +1,14 @@
 # Turbobard admin design interview
 
+## G1 update (2026-11-02)
+
+The owner approved the [safe catalog write design](admin-safe-writes.md).
+It supersedes the earlier requirements for recoverable history, search
+visibility verification/status, and a non-production drill. Code review and
+explicit owner approval gate production writes. A narrow shared-format check
+remains for both players; no broad legacy-player impact assessment is required.
+No production mutation was authorized by this design approval.
+
 Status: initial interview and slice map approved for ticket conversion on
 2026-11-01. Track work in the [GitHub map issue](https://github.com/bencodrington/turbobard-admin/issues/1).
 No implementation or production mutation was performed as part of ticket
