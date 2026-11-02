@@ -212,3 +212,64 @@ zone. Keep the owner-only Access policy in the Cloudflare Dashboard rather than
 recording it in policy files in this repository. Provide a plain-language
 dashboard walkthrough in the README. The repository retains one Wrangler file
 for the Worker deployment itself.
+
+## G2 update (2026-11-02)
+
+The owner approved the source-audio preparation design in [issue #11](https://github.com/bencodrington/turbobard-admin/issues/11).
+This authorizes design records and follow-up tickets only; it does not authorize
+production database or storage mutations. The design and conditional processing
+decision are recorded in [ADR-0003](adr/0003-browser-local-audio-preparation.md).
+The prototype and local draft workflow are tracked by [#27](https://github.com/bencodrington/turbobard-admin/issues/27)
+and [#28](https://github.com/bencodrington/turbobard-admin/issues/28); reviewed
+publication remains in [W4](https://github.com/bencodrington/turbobard-admin/issues/18).
+
+### Input and draft model
+
+- Accept local WAV, AIFF, FLAC, MP3, and Ogg/Vorbis source audio.
+- Prepare one Audio draft at a time. The owner explicitly selects Loop or
+  One-shot. A Loop has exactly one source file; a One-shot has one or more
+  variations.
+- Preserve the order in which files are selected for One-shot variations; do
+  not sort by filename.
+
+### Preparation and review
+
+- Generate MP3 at 192 kbps and WebM/Vorbis at quality 6. Preserve mono/stereo
+  channel layout and source sample rate where supported; resample only when
+  required. WebM is intended for a future rebuilt-player update. G2 does not
+  include that player change.
+- Measure integrated loudness (LUFS), sample peak (dBFS), and full-scale sample
+  count for both source files and prepared outputs. Report measurements without
+  normalization or blocking thresholds.
+- Warn on leading or trailing silence below −60 dBFS RMS for at least 0.5
+  seconds. Do not flag quiet sections inside a file.
+- Do not automatically analyze or alter Loop seams; human audition is the
+  quality check.
+- Show the current processing stage and per-output percentage when reliable;
+  otherwise show indeterminate progress. Require both encodings for every
+  source. Retain successful outputs, automatically retry each failed encoding
+  once, then offer manual retry.
+- Keep source files and outputs in browser memory for the open page only.
+  Refresh or close discards the Audio draft.
+- Before a draft is ready, audition every generated output, including every
+  One-shot variation.
+
+### Processing feasibility and publication boundary
+
+Processing must happen in the owner's browser if a feasibility prototype
+confirms support for the accepted source formats, both encodings, measurements,
+and an acceptable desktop workflow. If that prototype fails, reopen the
+execution-location decision; do not silently upload source files to a server.
+
+The previous admin's local FFmpeg workflow generated MP3 and WebM but required
+manual Cloud Storage upload and Firestore import. It does not establish a safe
+hosted pipeline. [FFmpeg.wasm documents MP3 and Vorbis encoders](https://github.com/ffmpegwasm/ffmpeg.wasm/blob/main/apps/website/docs/overview.md),
+while [its published benchmark](https://github.com/ffmpegwasm/ffmpeg.wasm/blob/main/apps/website/docs/performance.md)
+shows a substantial slowdown versus native FFmpeg on a video conversion; that
+benchmark does not establish audio conversion performance for this workflow.
+Browser-native WebCodecs does not provide MP3 encoding according to [MDN's codec guide](https://developer.mozilla.org/en-US/docs/Web/API/WebCodecs_API/Codec_selection).
+
+This design covers local preparation and audition only. Adding a Sound to the
+live catalog and publishing stored files remain in W4, behind G1's reviewed
+preview and Apply rules. No production data or storage was changed during this
+interview.

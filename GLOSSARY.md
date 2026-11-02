@@ -28,3 +28,12 @@ _Avoid_: Group
 **Sound catalog**:
 The searchable collection of Sounds, Packs, and their descriptive information
 available to Turbobard users.
+
+**Source audio**:
+Original audio supplied as the starting point for preparing a Sound.
+
+**Prepared audio**:
+Encoded audio produced from source audio and ready for review before publication.
+
+**Audio draft**:
+A Sound and its prepared audio assembled for review before being added to the Sound catalog.

@@ -4,9 +4,14 @@ G1 was refined on 2026-11-02 in [the safe-write design](admin-safe-writes.md).
 Its approved limits supersede the earlier history, search-verification, and
 non-production-drill requirements below. The other slice dependencies remain.
 
+G2 was refined on 2026-11-02 in [the interview record](admin-design.md) and
+[ADR-0003](adr/0003-browser-local-audio-preparation.md). Its approved direction
+is browser-local preparation, conditional on a feasibility prototype. Live
+publication remains a separate W4 workflow behind G1.
+
 Status: approved for ticket conversion on 2026-11-01. Track tickets and dependencies
 in the [GitHub map issue](https://github.com/bencodrington/turbobard-admin/issues/1).
-Published and verified: 21 native sub-issues and 38 native dependency links.
+Published and verified: 23 native sub-issues and 40 native dependency links.
 No implementation or production mutation was performed as part of ticket conversion.
 Requirements and source findings are in [the interview record](admin-design.md); terminology is in
 [the glossary](../GLOSSARY.md).
@@ -57,13 +62,14 @@ these broad slices are not ready to implement as written.
 | ID | Session | Inputs/dependencies | Decisions it must resolve |
 | --- | --- | --- | --- |
 | G1 | Safe live writes | R2 and integration findings | Resolved in the [G1 design](admin-safe-writes.md): before/after preview, explicit Apply, stale-edit rejection, uncertain-result readback, removal guards, and separate write identity. Preserve the shared catalog format. No admin history or search visibility check; code review and owner approval gate production writes. |
-| G2 | Source-audio preparation and ingestion | R2; publication follows G1 | Input formats and grouping, One-shot variations, target encodings for supported players, loudness/clipping/silence policy, seamless loops, processing execution/location, progress/failure/retry, temporary outputs, and pre-publication audition. Legacy processing tooling was not found, so include research before choosing a pipeline. |
+| G2 | Source-audio preparation and ingestion | R2; publication follows G1 | **Design approved.** Prototype browser-local processing, then implement draft preparation and audition. Accept WAV/AIFF/FLAC/MP3/Ogg-Vorbis; explicitly select one Loop source or one-or-more ordered One-shot variations; produce MP3 192 kbps and WebM/Vorbis quality 6; report source and output measurements; warn on leading/trailing silence; keep drafts in page memory; retry and audition all outputs. Reopen execution location if the prototype fails. WebM playback support in the rebuilt player is deferred to the owner's separate update. See follow-up tickets linked from #11 and W4. |
 | G3 | Replacement propagation in rebuilt saved scenes | R2, G1; coordinate with G2 | Deliver new audio on reopen/refresh/explicit reload; preserve active playback and saved metadata/settings. Cover Loop replacement, changes to One-shot variations, cache behavior, unavailable replacements, recovery, HTTP/HTTPS saved-state origins, and both players' catalog compatibility. Do not assume new database fields, overwritten paths, or a reconciliation mechanism. Only rebuilt-player propagation is required. |
 | G4 | Permanent storage deletion | R8, G1, G3 | Retention, old saved references, evidence required before deletion, confirmation, recovery options, and whether deletion can be allowed while legacy remains active. Catalog-unreferenced alone is insufficient evidence. |
 | G5 | Schema evolution after legacy retirement | Explicit retirement prerequisite | Backward compatibility, versioning/migrations, rollout, verification, rollback, and treatment of old browser saves. No schema changes before retirement. Design discussion may happen earlier. |
 
-G1, G2, and G3 are the next substantive design work. G4 and G5 are deferred follow-ups
-and do not block read-only administration or carefully designed ordinary edits.
+G1 and G2 designs are approved; G3 remains the next substantive design session.
+W4 waits on G1a, G1b, and #28. W5 waits on #28 and G3. G4 and G5 are deferred
+follow-ups and do not block read-only administration or carefully designed ordinary edits.
 
 ## Writes with established product scope
 
@@ -75,11 +81,12 @@ must wait for the relevant safety/processing designs. G1 may split them further.
 | W1 | Edit existing Sound metadata | R4, G1 | Structured name, attribution author/URLs, ordered tags and default timing; preserve IDs and unknown fields. Preview and Apply one entry. Link duplicate-tag reports to this editor. |
 | W2 | Create/edit Packs | R4, G1 | Name, ordered tags, existing-Sound membership/order, per-member volume/timing and individual auditioning; validate references. Saved user Environments retain their existing membership/settings. |
 | W3 | Remove catalog Sounds/Packs | W2, G1, G1c | Reviewed removal with typed-ID confirmation and no admin undo. Block Sound deletion while Packs reference it; resolve memberships explicitly. Preserve audio objects. |
-| W4 | Add Sounds from source audio | R4, G1, G2 | Local source upload, Loop/One-shot grouping, metadata, preparation, audition and reviewed publication of one Sound at a time. Expose partial failure/recovery as defined by the design. |
-| W5 | Replace audio and edit One-shot variations | W1, G2, G3 | Replace a Loop or add/remove/reorder One-shot variations; preserve Sound identity. Rebuilt saved scenes receive updated audio references on reopen/reload while retaining saved metadata/settings. Preserve legacy compatibility and old referenced files as required by the agreed design. |
+| W4 | Add Sounds from source audio | R4, G1a, G1b, #28 | Use the approved browser-local draft workflow, collect metadata, then preview and Apply publication of one Sound at a time. Expose publication partial failure/recovery through G1 safeguards. |
+| W5 | Replace audio and edit One-shot variations | W1, #28, G3 | Replace a Loop or add/remove/reorder One-shot variations; preserve Sound identity. Rebuilt saved scenes receive updated audio references on reopen/reload while retaining saved metadata/settings. Preserve legacy compatibility and old referenced files as required by the agreed design. |
 
-W1–W3 may proceed after G1 without waiting for source-audio processing or replacement
-propagation. W4 and W5 remain blocked until their focused designs are approved.
+W1–W3 may proceed after their G1 implementation dependencies without waiting for
+source-audio processing or replacement propagation. W4 and W5 remain blocked on
+the implementation dependencies listed above.
 Recovery/audit storage choices must themselves respect the schema constraint.
 
 ## Deferred extensions
