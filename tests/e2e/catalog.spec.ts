@@ -359,3 +359,102 @@ test('referenced-file health shows partial coverage and a per-file decode failur
   await mkdir(dirname(capture), { recursive: true });
   await page.screenshot({ path: capture, fullPage: true });
 });
+
+test('statistics separate catalog totals from current and stale file results', async ({
+  page,
+}) => {
+  await page.clock.install({ time: new Date('2026-11-02T12:00:00Z') });
+  await page.route('**/api/catalog?**', async (route) => {
+    const isSound =
+      new URL(route.request().url()).searchParams.get('collection') ===
+      'tracks';
+    await route.fulfill({
+      json: {
+        items: isSound
+          ? [
+              {
+                id: 'rain',
+                collection: 'tracks',
+                fields: {
+                  name: 'Rain',
+                  tags: ['Storm', 'Storm'],
+                  fileName: 'rain',
+                  source: { author: 'Mira' },
+                },
+                rawFields: {},
+                warnings: [],
+              },
+              {
+                id: 'horn',
+                collection: 'tracks',
+                fields: {
+                  name: 'Horn',
+                  tags: ['storm'],
+                  samples: ['horn-a', 'horn-b'],
+                },
+                rawFields: {},
+                warnings: [],
+              },
+              {
+                id: 'broken',
+                collection: 'tracks',
+                fields: { name: 'Broken', tags: 'bad' },
+                rawFields: {},
+                warnings: ['Tags must be a list of text values.'],
+              },
+            ]
+          : [
+              {
+                id: 'weather',
+                collection: 'packs',
+                fields: { name: 'Weather', tags: ['Storm'], tracks: [] },
+                rawFields: {},
+                warnings: [],
+              },
+            ],
+        nextPageToken: null,
+        complete: true,
+        scannedAt: '2026-11-02T11:59:00Z',
+      },
+    });
+  });
+  await page.route('**/api/file?**', async (route) => {
+    const name = new URL(route.request().url()).searchParams.get('name');
+    await route.fulfill({
+      json: {
+        name,
+        status: name === 'rain.webm' ? 'missing' : 'available',
+        checkedAt: '2026-11-02T12:00:00Z',
+      },
+    });
+  });
+  await page.goto('/');
+  const panel = page.getByRole('region', { name: 'Statistics' });
+  await expect(
+    panel.getByText('Catalog totals cover all Sounds and Packs.'),
+  ).toBeVisible();
+  await expect(panel.getByText('1 Loops')).toBeVisible();
+  await expect(panel.getByText('1 One-shots')).toBeVisible();
+  await expect(panel.getByText('1 Packs')).toBeVisible();
+  await expect(panel.getByText('2 One-shot samples')).toBeVisible();
+  await expect(panel.getByText('1 Sounds of unknown type')).toBeVisible();
+  await expect(
+    panel.getByText('1 entries with validation warnings.'),
+  ).toBeVisible();
+  await expect(panel.getByText('Files unchecked.')).toBeVisible();
+  await page.getByRole('button', { name: 'Check referenced files' }).click();
+  await expect(
+    panel.getByText('Health scan complete for the current Sound catalog.'),
+  ).toBeVisible();
+  await expect(
+    panel.getByText(/6 of 6 referenced MP3\/WebM files checked. 1 missing/),
+  ).toBeVisible();
+  const capture = resolve(
+    process.cwd(),
+    'docs/evidence/catalog-statistics.png',
+  );
+  await mkdir(dirname(capture), { recursive: true });
+  await page.screenshot({ path: capture, fullPage: true });
+  await page.clock.fastForward(61 * 60 * 1000);
+  await expect(panel.getByText(/Health results stale/)).toBeVisible();
+});

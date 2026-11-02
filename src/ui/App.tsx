@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CatalogCollection, CatalogItem } from '../catalog';
 import { buildTagReport } from '../tagReport';
+import {
+  authorOf,
+  buildStatistics,
+  itemType,
+  referencedFileNames,
+  tagsOf,
+} from '../statistics';
+import type { ItemType } from '../statistics';
 
 interface CatalogPage {
   items: CatalogItem[];
@@ -37,8 +45,6 @@ interface FileScan {
   checkedAt: string | null;
   error: string | null;
 }
-
-type ItemType = 'loop' | 'one-shot' | 'pack' | 'unknown';
 
 const AUDIO_BASE = 'https://storage.googleapis.com/turbo-bard.appspot.com';
 
@@ -165,22 +171,6 @@ const emptyCollection = (): CollectionState => ({
   scannedAt: null,
 });
 
-function itemType(item: CatalogItem): ItemType {
-  if (item.collection === 'packs') return 'pack';
-  const hasFileName = typeof item.fields.fileName === 'string';
-  const hasSamples = Array.isArray(item.fields.samples);
-  if (hasFileName && !hasSamples) return 'loop';
-  if (hasSamples && !hasFileName) return 'one-shot';
-  return 'unknown';
-}
-
-function authorOf(item: CatalogItem): string {
-  const source = item.fields.source;
-  if (!source || typeof source !== 'object' || Array.isArray(source)) return '';
-  const author = (source as Record<string, unknown>).author;
-  return typeof author === 'string' ? author : '';
-}
-
 function sourceUrlsOf(item: CatalogItem): unknown[] {
   const source = item.fields.source;
   if (!source || typeof source !== 'object' || Array.isArray(source)) return [];
@@ -198,12 +188,6 @@ function safeExternalUrl(value: unknown): string | null {
   } catch {
     return null;
   }
-}
-
-function tagsOf(item: CatalogItem): string[] {
-  return Array.isArray(item.fields.tags)
-    ? item.fields.tags.filter((tag): tag is string => typeof tag === 'string')
-    : [];
 }
 
 function searchableText(item: CatalogItem): string {
@@ -307,6 +291,7 @@ export default function App() {
   const [copyStatus, setCopyStatus] = useState('');
   const [loadingTagReport, setLoadingTagReport] = useState(false);
   const [fileChecks, setFileChecks] = useState<Record<string, FileCheck>>({});
+  const [currentTime, setCurrentTime] = useState(() => Date.now());
   const [fileScan, setFileScan] = useState<FileScan>({
     running: false,
     done: 0,
@@ -381,21 +366,7 @@ export default function App() {
       error = cause instanceof Error ? cause.message : 'catalog_request_failed';
       if (!sounds.length) sounds = collections.tracks.items;
     }
-    const names = [
-      ...new Set(
-        sounds.flatMap((item) => {
-          const fields = item.fields;
-          const stems = [
-            fields.fileName,
-            ...(Array.isArray(fields.samples) ? fields.samples : []),
-          ].filter(
-            (value): value is string =>
-              typeof value === 'string' && Boolean(value.trim()),
-          );
-          return stems.flatMap((stem) => [`${stem}.mp3`, `${stem}.webm`]);
-        }),
-      ),
-    ];
+    const names = referencedFileNames(sounds);
     setFileScan((previous) => ({ ...previous, total: names.length }));
     let cursor = 0;
     await Promise.all(
@@ -527,6 +498,8 @@ export default function App() {
   useEffect(() => {
     void loadCollection('tracks');
     void loadCollection('packs');
+    const timer = window.setInterval(() => setCurrentTime(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
   }, []);
 
   const allItems = useMemo(
@@ -536,6 +509,27 @@ export default function App() {
   const tagReport = useMemo(() => buildTagReport(allItems), [allItems]);
   const tagReportComplete = Object.values(collections).every(
     (collection) => collection.complete && !collection.error,
+  );
+  const statistics = buildStatistics(
+    allItems,
+    tagReport,
+    (item) => warningsForItem(item, collections),
+    fileChecks,
+  );
+  const healthStale = Boolean(
+    fileScan.checkedAt &&
+    (currentTime - Date.parse(fileScan.checkedAt) > 60 * 60 * 1000 ||
+      (collections.tracks.scannedAt &&
+        Date.parse(collections.tracks.scannedAt) >
+          Date.parse(fileScan.checkedAt))),
+  );
+  const healthComplete = Boolean(
+    fileScan.checkedAt &&
+    fileScan.complete &&
+    !healthStale &&
+    collections.tracks.complete &&
+    !collections.tracks.error &&
+    statistics.checkedFiles === statistics.referencedFiles,
   );
   function openItem(item: CatalogItem) {
     setSelectedKey(`${item.collection}/${item.id}`);
@@ -625,6 +619,115 @@ export default function App() {
         <div className="catalog-count" aria-live="polite">
           <strong>{visibleItems.length}</strong>
           <span>visible entries</span>
+        </div>
+      </section>
+
+      <section className="statistics-panel" aria-labelledby="statistics-title">
+        <div className="statistics-heading">
+          <div>
+            <p className="eyebrow">Catalog overview</p>
+            <h2 id="statistics-title">Statistics</h2>
+          </div>
+          {!tagReportComplete && (
+            <button
+              type="button"
+              disabled={loading || loadingTagReport}
+              onClick={() => void loadFullTagReport()}
+            >
+              {loadingTagReport ? 'Loading catalog…' : 'Load full catalog'}
+            </button>
+          )}
+        </div>
+        <p role="status">
+          {tagReportComplete
+            ? 'Catalog totals cover all Sounds and Packs.'
+            : 'Partial catalog totals: load all Sounds and Packs for complete statistics.'}
+        </p>
+        <div className="statistics-totals">
+          <p>
+            <strong>{statistics.loops}</strong> Loops
+          </p>
+          <p>
+            <strong>{statistics.oneShots}</strong> One-shots
+          </p>
+          <p>
+            <strong>{statistics.packs}</strong> Packs
+          </p>
+          <p>
+            <strong>{statistics.samples}</strong> One-shot samples
+          </p>
+          <p>
+            <strong>{statistics.unknownSounds}</strong> Sounds of unknown type
+          </p>
+        </div>
+        <div className="statistics-details">
+          <div>
+            <h3>Authors</h3>
+            <p>Sound entries by stored author.</p>
+            {statistics.authors.length ? (
+              <ul>
+                {statistics.authors.map(({ name, count }) => (
+                  <li key={name}>
+                    {name}: {count}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>No authors in loaded Sounds.</p>
+            )}
+          </div>
+          <div>
+            <h3>Tags</h3>
+            <p>
+              Entries per exact stored tag; repeats in one entry count once.
+            </p>
+            {statistics.tags.length ? (
+              <ul>
+                {statistics.tags.map(({ name, count }) => (
+                  <li key={name}>
+                    <code>{JSON.stringify(name)}</code>: {count}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>No tags in loaded entries.</p>
+            )}
+          </div>
+          <div>
+            <h3>Data problems</h3>
+            <p>{statistics.dataProblems} entries with validation warnings.</p>
+            <p>
+              {statistics.exactTagRepeats} exact repeated tags;{' '}
+              {statistics.tagVariantGroups} case or whitespace variant groups.
+            </p>
+          </div>
+          <div>
+            <h3>File problems</h3>
+            <p>
+              {fileScan.running
+                ? 'Health scan in progress.'
+                : !fileScan.checkedAt
+                  ? 'Files unchecked.'
+                  : healthStale
+                    ? 'Health results stale: scan is over an hour old or the Sound catalog was refreshed.'
+                    : healthComplete
+                      ? 'Health scan complete for the current Sound catalog.'
+                      : 'Partial health results: catalog or file scan incomplete.'}
+            </p>
+            <p>
+              {statistics.checkedFiles} of {statistics.referencedFiles}{' '}
+              referenced MP3/WebM files checked. {statistics.missingFiles}{' '}
+              missing; {statistics.inaccessibleFiles} inaccessible.
+            </p>
+            <p>
+              {statistics.decodeFailures} decode failures;{' '}
+              {statistics.playbackUnavailable} playback unavailable. Playback is
+              checked only when auditioned.
+            </p>
+            {fileScan.checkedAt && (
+              <p>Last scan: {new Date(fileScan.checkedAt).toLocaleString()}.</p>
+            )}
+          </div>
         </div>
       </section>
 

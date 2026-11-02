@@ -106,6 +106,7 @@ h2 {
   color: #fff;
   font-size: 1.6rem;
 }
+.statistics-panel,
 .tag-report {
   margin-bottom: 1rem;
   border: 1px solid #35566a;
@@ -113,16 +114,19 @@ h2 {
   padding: 1rem;
   background: #152630;
 }
+.statistics-heading,
 .tag-report-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 1rem;
 }
+.statistics-heading h2,
 .tag-report-heading h2 {
   margin-top: 0.25rem;
   font-size: 1.5rem;
 }
+.statistics-heading button,
 .tag-report-heading button {
   min-height: 2.7rem;
   border: 1px solid #278bc1;
@@ -132,12 +136,69 @@ h2 {
   background: #075f98;
   cursor: pointer;
 }
+.statistics-heading button:disabled,
 .tag-report-heading button:disabled {
   opacity: 0.6;
   cursor: wait;
 }
 .tag-report > p {
   color: #c7d6dd;
+}
+.statistics-panel > p {
+  color: #c7d6dd;
+}
+.statistics-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr));
+  gap: 0.65rem;
+  margin: 1rem 0;
+}
+.statistics-totals p {
+  display: grid;
+  gap: 0.2rem;
+  margin: 0;
+  border: 1px solid #35566a;
+  border-radius: 6px;
+  padding: 0.8rem;
+  background: #202b31;
+}
+.statistics-totals strong {
+  font-size: 1.7rem;
+}
+.statistics-details {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.7rem;
+}
+.statistics-details > div {
+  min-width: 0;
+  border: 1px solid #35566a;
+  border-radius: 6px;
+  padding: 0.85rem;
+  background: #202b31;
+}
+.statistics-details h3 {
+  margin: 0;
+  font-family: var(--font-display);
+  font-weight: 400;
+}
+.statistics-details p {
+  margin: 0.35rem 0;
+  color: #c7d6dd;
+}
+.statistics-details ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.3rem;
+  max-height: 12rem;
+  overflow: auto;
+}
+.statistics-details li {
+  margin: 0.2rem 0;
+  overflow-wrap: anywhere;
+}
+.statistics-details code {
+  color: #ffe79a;
+  white-space: pre-wrap;
 }
 .tag-report-groups {
   display: grid;
@@ -506,6 +567,7 @@ h2 {
   }
 }
 @media (max-width: 620px) {
+  .statistics-details,
   .tag-report-groups {
     grid-template-columns: 1fr;
   }

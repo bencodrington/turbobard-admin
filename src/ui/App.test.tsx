@@ -269,13 +269,17 @@ describe('catalog browsing', () => {
       value: { code: 2 },
     });
     fireEvent.error(audio);
-    expect(screen.getByText(/playback unavailable/i)).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('dialog')).getByText(/playback unavailable/i),
+    ).toBeInTheDocument();
     Object.defineProperty(audio, 'error', {
       configurable: true,
       value: { code: 3 },
     });
     fireEvent.error(audio);
-    expect(screen.getByText(/decode failed/i)).toBeInTheDocument();
+    expect(
+      within(screen.getByRole('dialog')).getByText(/decode failed/i),
+    ).toBeInTheDocument();
     fireEvent.canPlay(audio);
     expect(screen.getByText(/ready to play/i)).toBeInTheDocument();
     expect(screen.getByText(/rain\.mp3.*checked/i)).toBeInTheDocument();
