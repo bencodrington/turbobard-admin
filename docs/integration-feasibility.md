@@ -3,8 +3,10 @@
 Status: source and documentation research complete on 2026-11-01. No deployed
 Firebase project or Cloudflare account was accessed. The deployed collection
 contents, object inventory, IAM grants, and current search behavior remain
-unverified. Cloudflare's Web Crypto and Google service-account OAuth docs
-support the proposed Worker REST path; no runtime integration spike was run.
+unverified. `jose` supports the proposed Worker REST path, and a local
+compatibility spike verified the PKCS#8/RS256 request path. Real service-account
+authentication, IAM grants, Firestore access, and deployed behavior remain
+unverified.
 
 ## Previous admin checkout
 
@@ -105,6 +107,18 @@ triggers and warm search functions that cache results without visible
 invalidation. Reads of authoritative `tracks`/`packs` documents therefore need
 not match search projection visibility at every instant. No deployed parity or
 cache behavior has been verified.
+
+### R3 local Worker compatibility spike (2026-11-01)
+
+The catalog API uses `jose` for RS256 service-account assertions and PKCS#8
+private-key import. `jose` documents Cloudflare Workers support. A local
+Wrangler Worker invocation with a throwaway generated key reached Google's
+OAuth token endpoint and returned the expected `authentication_failed` response
+for the intentionally invalid test identity; this confirms the local Worker
+runtime can import the key, sign the assertion, and make the token request. It
+does not verify a real service-account identity, Google IAM grants, Firestore
+permissions, or deployed behavior. No production credentials or catalog data
+were used.
 
 ## Proposed private API contract
 
