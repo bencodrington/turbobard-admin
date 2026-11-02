@@ -194,3 +194,12 @@ writing the source file to `static/`. The old app does not contain a Firestore
 read API or automatic Cloud Storage upload. This is a local preparation/manual
 publication reference only; it does not establish a safe hosted pipeline or
 deployed behavior. See `docs/integration-feasibility.md` for the R2 implications.
+
+### Deployment preference update (2026-11-02)
+
+Use one Turbobard Admin deployment, without separate staging and production
+Workers. Use Cloudflare's free `workers.dev` URL, with no custom domain or DNS
+zone. Keep the owner-only Access policy in the Cloudflare Dashboard rather than
+recording it in policy files in this repository. Provide a plain-language
+dashboard walkthrough in the README. The repository retains one Wrangler file
+for the Worker deployment itself.
