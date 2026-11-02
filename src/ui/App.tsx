@@ -17,29 +17,143 @@ interface CollectionState {
   scannedAt: string | null;
 }
 
+interface FileCheck {
+  name: string;
+  status: 'available' | 'missing' | 'inaccessible';
+  checkedAt: string;
+  size?: string;
+  contentType?: string;
+  updated?: string;
+  playback?: 'ready' | 'decode-failed' | 'unavailable';
+  playbackCheckedAt?: string;
+}
+
+interface FileScan {
+  running: boolean;
+  done: number;
+  total: number;
+  complete: boolean;
+  checkedAt: string | null;
+  error: string | null;
+}
+
 type ItemType = 'loop' | 'one-shot' | 'pack' | 'unknown';
 
 const AUDIO_BASE = 'https://storage.googleapis.com/turbo-bard.appspot.com';
-
-function audioUrl(fileName: string): string {
-  return `${AUDIO_BASE}/${encodeURIComponent(fileName)}.mp3`;
-}
 
 /* eslint-disable jsx-a11y/media-has-caption -- Catalog entries are sound effects without speech; the label identifies each audition. */
 function AudioPreview({
   fileName,
   label,
+  format,
+  onPlayback,
 }: {
   fileName: string;
   label: string;
+  format: 'mp3' | 'webm';
+  onPlayback: (
+    name: string,
+    result: 'ready' | 'decode-failed' | 'unavailable',
+  ) => void;
 }) {
   return (
-    <audio aria-label={label} controls preload="none" src={audioUrl(fileName)}>
+    <audio
+      aria-label={`${label} ${format.toUpperCase()}`}
+      controls
+      preload="none"
+      src={`${AUDIO_BASE}/${encodeURIComponent(fileName)}.${format}`}
+      onCanPlay={() => onPlayback(`${fileName}.${format}`, 'ready')}
+      onError={(event) =>
+        onPlayback(
+          `${fileName}.${format}`,
+          event.currentTarget.error?.code === 3
+            ? 'decode-failed'
+            : 'unavailable',
+        )
+      }
+    >
       Audio playback is not supported by this browser.
     </audio>
   );
 }
 /* eslint-enable jsx-a11y/media-has-caption */
+
+function FileStatus({
+  fileName,
+  checks,
+}: {
+  fileName: string;
+  checks: Record<string, FileCheck>;
+}) {
+  return (
+    <div className="file-status">
+      {(['mp3', 'webm'] as const).map((format) => {
+        const name = `${fileName}.${format}`;
+        const check = checks[name];
+        const status = check?.checkedAt
+          ? check.status === 'available'
+            ? 'Available'
+            : check.status === 'missing'
+              ? 'Missing'
+              : 'Inaccessible'
+          : 'Unchecked';
+        const playbackStatus =
+          check?.playback === 'decode-failed'
+            ? 'Decode failed'
+            : check?.playback === 'unavailable'
+              ? 'Playback unavailable'
+              : check?.playback === 'ready'
+                ? 'Ready to play'
+                : 'Not played';
+        return (
+          <p key={name}>
+            {name} · {status} · {playbackStatus}
+            {check?.size && check.status === 'available'
+              ? ` · ${check.size} bytes`
+              : ''}
+            {check?.contentType ? ` · ${check.contentType}` : ''}
+            {check?.checkedAt
+              ? ` · Checked ${new Date(check.checkedAt).toLocaleString()}`
+              : ''}
+            {check?.playbackCheckedAt
+              ? ` · Playback checked ${new Date(check.playbackCheckedAt).toLocaleString()}`
+              : ''}
+          </p>
+        );
+      })}
+    </div>
+  );
+}
+
+function AudioControls({
+  fileName,
+  label,
+  checks,
+  onPlayback,
+}: {
+  fileName: string;
+  label: string;
+  checks: Record<string, FileCheck>;
+  onPlayback: (
+    name: string,
+    result: 'ready' | 'decode-failed' | 'unavailable',
+  ) => void;
+}) {
+  return (
+    <>
+      {(['mp3', 'webm'] as const).map((format) => (
+        <AudioPreview
+          key={format}
+          fileName={fileName}
+          label={label}
+          format={format}
+          onPlayback={onPlayback}
+        />
+      ))}
+      <FileStatus fileName={fileName} checks={checks} />
+    </>
+  );
+}
 
 const emptyCollection = (): CollectionState => ({
   items: [],
@@ -190,6 +304,141 @@ export default function App() {
   const [problemFilter, setProblemFilter] = useState('all');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [copyStatus, setCopyStatus] = useState('');
+  const [fileChecks, setFileChecks] = useState<Record<string, FileCheck>>({});
+  const [fileScan, setFileScan] = useState<FileScan>({
+    running: false,
+    done: 0,
+    total: 0,
+    complete: false,
+    checkedAt: null,
+    error: null,
+  });
+
+  function recordPlayback(
+    name: string,
+    result: 'ready' | 'decode-failed' | 'unavailable',
+  ) {
+    setFileChecks((previous) => ({
+      ...previous,
+      [name]: {
+        ...(previous[name] ?? { name, status: 'inaccessible', checkedAt: '' }),
+        playback: result,
+        playbackCheckedAt: new Date().toISOString(),
+      },
+    }));
+  }
+
+  async function scanReferencedFiles() {
+    if (fileScan.running) return;
+    setFileScan({
+      running: true,
+      done: 0,
+      total: 0,
+      complete: false,
+      checkedAt: null,
+      error: null,
+    });
+    let sounds: CatalogItem[] = [];
+    let nextPageToken: string | null = null;
+    let complete = false;
+    let error: string | null = null;
+    try {
+      const firstPage = await loadCollectionPage('tracks');
+      sounds = firstPage.items;
+      nextPageToken = firstPage.nextPageToken;
+      complete = firstPage.complete;
+      setCollections((previous) => ({
+        ...previous,
+        tracks: {
+          ...previous.tracks,
+          items: sounds,
+          nextPageToken,
+          complete,
+          scannedAt: firstPage.scannedAt,
+          error: null,
+        },
+      }));
+      while (nextPageToken) {
+        const page = await loadCollectionPage('tracks', nextPageToken);
+        sounds = [...sounds, ...page.items];
+        nextPageToken = page.nextPageToken;
+        complete = page.complete;
+        setCollections((previous) => ({
+          ...previous,
+          tracks: {
+            ...previous.tracks,
+            items: sounds,
+            nextPageToken,
+            complete,
+            scannedAt: page.scannedAt,
+            error: null,
+          },
+        }));
+      }
+    } catch (cause) {
+      error = cause instanceof Error ? cause.message : 'catalog_request_failed';
+      if (!sounds.length) sounds = collections.tracks.items;
+    }
+    const names = [
+      ...new Set(
+        sounds.flatMap((item) => {
+          const fields = item.fields;
+          const stems = [
+            fields.fileName,
+            ...(Array.isArray(fields.samples) ? fields.samples : []),
+          ].filter(
+            (value): value is string =>
+              typeof value === 'string' && Boolean(value.trim()),
+          );
+          return stems.flatMap((stem) => [`${stem}.mp3`, `${stem}.webm`]);
+        }),
+      ),
+    ];
+    setFileScan((previous) => ({ ...previous, total: names.length }));
+    let cursor = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(4, names.length) }, async () => {
+        while (cursor < names.length) {
+          const name = names[cursor++];
+          let check: FileCheck;
+          try {
+            const url = new URL('/api/file', window.location.origin);
+            url.searchParams.set('name', name);
+            const response = await fetch(url);
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+            check = (await response.json()) as FileCheck;
+            if (
+              check.name !== name ||
+              !['available', 'missing', 'inaccessible'].includes(check.status)
+            )
+              throw new Error('Invalid file response');
+          } catch {
+            check = {
+              name,
+              status: 'inaccessible',
+              checkedAt: new Date().toISOString(),
+            };
+          }
+          setFileChecks((previous) => ({
+            ...previous,
+            [name]: {
+              ...check,
+              playback: previous[name]?.playback,
+              playbackCheckedAt: previous[name]?.playbackCheckedAt,
+            },
+          }));
+          setFileScan((previous) => ({ ...previous, done: previous.done + 1 }));
+        }
+      }),
+    );
+    setFileScan((previous) => ({
+      ...previous,
+      running: false,
+      complete: complete && !error,
+      checkedAt: new Date().toISOString(),
+      error,
+    }));
+  }
 
   async function loadCollection(collection: CatalogCollection, resume = false) {
     const current = collections[collection];
@@ -354,6 +603,29 @@ export default function App() {
           Loading Sounds and Packs…
         </p>
       )}
+
+      <section className="file-check-panel" aria-label="Referenced-file health">
+        <div>
+          <h2>Referenced-file health</h2>
+          <p>
+            Check MP3 and WebM object existence and metadata on demand. Listen
+            to each file to assess audio correctness; a storage check cannot do
+            that.
+          </p>
+          <p role="status">
+            {fileScan.checkedAt || fileScan.running
+              ? `${fileScan.done} of ${fileScan.total} file checks complete${fileScan.running ? '…' : '.'} ${fileScan.complete ? 'Catalog scan complete.' : 'Catalog scan incomplete.'}${fileScan.error ? ` ${fileScan.error}` : ''}${fileScan.checkedAt ? ` Checked ${new Date(fileScan.checkedAt).toLocaleString()}.` : ''}`
+              : 'Files are unchecked. No scan has run.'}
+          </p>
+        </div>
+        <button
+          type="button"
+          disabled={fileScan.running || loading}
+          onClick={() => void scanReferencedFiles()}
+        >
+          {fileScan.running ? 'Checking files…' : 'Check referenced files'}
+        </button>
+      </section>
 
       <section className="catalog-controls" aria-label="Catalog filters">
         <label className="search-control">
@@ -637,9 +909,11 @@ export default function App() {
                 selectedItem.fields.fileName.trim() ? (
                   <div className="audio-row">
                     <span>{selectedItem.fields.fileName}</span>
-                    <AudioPreview
+                    <AudioControls
                       fileName={selectedItem.fields.fileName}
                       label={selectedItem.fields.fileName}
+                      checks={fileChecks}
+                      onPlayback={recordPlayback}
                     />
                   </div>
                 ) : null}
@@ -650,9 +924,11 @@ export default function App() {
                         <span>
                           Variation {index + 1}: {sample}
                         </span>
-                        <AudioPreview
+                        <AudioControls
                           fileName={sample}
                           label={`Variation ${index + 1}: ${sample}`}
+                          checks={fileChecks}
+                          onPlayback={recordPlayback}
                         />
                       </div>
                     ) : null,
@@ -779,9 +1055,11 @@ export default function App() {
                                 : ''}
                               {fileName}
                             </span>
-                            <AudioPreview
+                            <AudioControls
                               fileName={fileName}
                               label={`${soundName}: ${fileName}`}
+                              checks={fileChecks}
+                              onPlayback={recordPlayback}
                             />
                           </div>
                         ))}

@@ -24,7 +24,8 @@ interface AccessToken {
 }
 
 const tokenEndpoint = 'https://oauth2.googleapis.com/token';
-const firestoreScope = 'https://www.googleapis.com/auth/datastore';
+const readScopes =
+  'https://www.googleapis.com/auth/datastore https://www.googleapis.com/auth/devstorage.read_only';
 const pageSize = 250;
 let accessToken: AccessToken | undefined;
 
@@ -54,7 +55,7 @@ async function createAssertion(
 ): Promise<string> {
   const now = Math.floor(Date.now() / 1000);
   const key = await importPKCS8(privatePem.replace(/\\n/g, '\n'), 'RS256');
-  return new SignJWT({ scope: firestoreScope })
+  return new SignJWT({ scope: readScopes })
     .setProtectedHeader({ alg: 'RS256', typ: 'JWT' })
     .setIssuer(email)
     .setAudience(tokenEndpoint)
@@ -204,6 +205,57 @@ async function listCatalog(request: Request, env: Env): Promise<Response> {
   });
 }
 
+async function checkFile(request: Request, env: Env): Promise<Response> {
+  const name = new URL(request.url).searchParams.get('name');
+  if (
+    !name ||
+    name.length > 1024 ||
+    name.startsWith('/') ||
+    [...name].some((character) => character.charCodeAt(0) < 32) ||
+    !/\.(mp3|webm)$/i.test(name)
+  ) {
+    throw new ApiError(400, 'invalid_file_name');
+  }
+  const token = await getAccessToken(env);
+  const endpoint = `https://storage.googleapis.com/storage/v1/b/turbo-bard.appspot.com/o/${encodeURIComponent(name)}`;
+  let response: Response;
+  try {
+    response = await fetch(endpoint, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal: AbortSignal.timeout(15_000),
+    });
+  } catch {
+    return jsonResponse({
+      name,
+      status: 'inaccessible',
+      checkedAt: new Date().toISOString(),
+    });
+  }
+  const checkedAt = new Date().toISOString();
+  if (response.status === 404)
+    return jsonResponse({ name, status: 'missing', checkedAt });
+  if (!response.ok)
+    return jsonResponse({ name, status: 'inaccessible', checkedAt });
+  try {
+    const metadata = (await response.json()) as Record<string, unknown>;
+    if (metadata.name !== name) throw new Error('Invalid storage response');
+    return jsonResponse({
+      name,
+      status: 'available',
+      checkedAt,
+      size: typeof metadata.size === 'string' ? metadata.size : undefined,
+      contentType:
+        typeof metadata.contentType === 'string'
+          ? metadata.contentType
+          : undefined,
+      updated:
+        typeof metadata.updated === 'string' ? metadata.updated : undefined,
+    });
+  } catch {
+    return jsonResponse({ name, status: 'inaccessible', checkedAt });
+  }
+}
+
 async function handleApi(request: Request, env: Env): Promise<Response> {
   const url = new URL(request.url);
   if (request.method !== 'GET')
@@ -219,6 +271,7 @@ async function handleApi(request: Request, env: Env): Promise<Response> {
     });
   }
   if (url.pathname === '/api/catalog') return listCatalog(request, env);
+  if (url.pathname === '/api/file') return checkFile(request, env);
   return jsonResponse({ error: 'not_found' }, 404);
 }
 
