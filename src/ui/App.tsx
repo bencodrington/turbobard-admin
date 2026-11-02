@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { CatalogCollection, CatalogItem } from '../catalog';
+import { buildTagReport } from '../tagReport';
 
 interface CatalogPage {
   items: CatalogItem[];
@@ -304,6 +305,7 @@ export default function App() {
   const [problemFilter, setProblemFilter] = useState('all');
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
   const [copyStatus, setCopyStatus] = useState('');
+  const [loadingTagReport, setLoadingTagReport] = useState(false);
   const [fileChecks, setFileChecks] = useState<Record<string, FileCheck>>({});
   const [fileScan, setFileScan] = useState<FileScan>({
     running: false,
@@ -477,6 +479,51 @@ export default function App() {
     }
   }
 
+  async function loadFullTagReport() {
+    if (loadingTagReport) return;
+    setLoadingTagReport(true);
+    for (const collection of ['tracks', 'packs'] as const) {
+      const current = collections[collection];
+      if (current.complete && !current.error) continue;
+      let items = current.nextPageToken ? current.items : [];
+      let token = current.nextPageToken;
+      let scannedAt = current.scannedAt;
+      setCollections((previous) => ({
+        ...previous,
+        [collection]: { ...previous[collection], loading: true, error: null },
+      }));
+      try {
+        do {
+          const page = await loadCollectionPage(collection, token);
+          items = [...items, ...page.items];
+          token = page.nextPageToken;
+          scannedAt = page.scannedAt;
+          setCollections((previous) => ({
+            ...previous,
+            [collection]: {
+              items,
+              nextPageToken: token,
+              complete: page.complete,
+              loading: Boolean(token),
+              error: null,
+              scannedAt,
+            },
+          }));
+        } while (token);
+      } catch (error) {
+        setCollections((previous) => ({
+          ...previous,
+          [collection]: {
+            ...previous[collection],
+            loading: false,
+            error: error instanceof Error ? error.message : 'request_failed',
+          },
+        }));
+      }
+    }
+    setLoadingTagReport(false);
+  }
+
   useEffect(() => {
     void loadCollection('tracks');
     void loadCollection('packs');
@@ -486,6 +533,14 @@ export default function App() {
     () => [...collections.tracks.items, ...collections.packs.items],
     [collections],
   );
+  const tagReport = useMemo(() => buildTagReport(allItems), [allItems]);
+  const tagReportComplete = Object.values(collections).every(
+    (collection) => collection.complete && !collection.error,
+  );
+  function openItem(item: CatalogItem) {
+    setSelectedKey(`${item.collection}/${item.id}`);
+    setCopyStatus('');
+  }
   const tags = useMemo(
     () =>
       [...new Set(allItems.flatMap(tagsOf))].sort((left, right) =>
@@ -570,6 +625,85 @@ export default function App() {
         <div className="catalog-count" aria-live="polite">
           <strong>{visibleItems.length}</strong>
           <span>visible entries</span>
+        </div>
+      </section>
+
+      <section className="tag-report" aria-labelledby="tag-report-title">
+        <div className="tag-report-heading">
+          <div>
+            <p className="eyebrow">Catalog quality</p>
+            <h2 id="tag-report-title">Duplicate-tag report</h2>
+          </div>
+          {!tagReportComplete && (
+            <button
+              type="button"
+              disabled={loading || loadingTagReport}
+              onClick={() => void loadFullTagReport()}
+            >
+              {loadingTagReport ? 'Loading catalog…' : 'Load full catalog'}
+            </button>
+          )}
+        </div>
+        <p role="status">
+          {tagReportComplete
+            ? 'Report covers all loaded Sounds and Packs.'
+            : 'Partial report: load all Sounds and Packs to check catalog-wide variants.'}{' '}
+          Tags are shown as stored. No changes are applied.
+        </p>
+        <div className="tag-report-groups">
+          <div>
+            <h3>Exact repeats within entries</h3>
+            {tagReport.repeated.length ? (
+              <ul>
+                {tagReport.repeated.map(({ tag, item, count }) => (
+                  <li key={`${item.collection}/${item.id}/${tag}`}>
+                    <code>{JSON.stringify(tag)}</code> appears {count} times in{' '}
+                    <button
+                      type="button"
+                      className="inspect-link"
+                      onClick={() => openItem(item)}
+                    >
+                      {titleOf(item)} ({item.collection}/{item.id})
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>No exact repeats found in loaded entries.</p>
+            )}
+          </div>
+          <div>
+            <h3>Case or whitespace variants</h3>
+            {tagReport.variants.length ? (
+              <ul>
+                {tagReport.variants.map(({ spellings }, index) => (
+                  <li key={`${spellings[0].tag}/${index}`}>
+                    <ul>
+                      {spellings.map(({ tag, entries }) => (
+                        <li key={tag}>
+                          <code>{JSON.stringify(tag)}</code>:{' '}
+                          {entries.map(({ item }, entryIndex) => (
+                            <span key={`${item.collection}/${item.id}`}>
+                              {entryIndex > 0 ? ', ' : ''}
+                              <button
+                                type="button"
+                                className="inspect-link"
+                                onClick={() => openItem(item)}
+                              >
+                                {titleOf(item)} ({item.collection}/{item.id})
+                              </button>
+                            </span>
+                          ))}
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p>No case or whitespace variants found in loaded entries.</p>
+            )}
+          </div>
         </div>
       </section>
 
@@ -711,10 +845,7 @@ export default function App() {
                     <button
                       type="button"
                       className="inspect-link"
-                      onClick={() => {
-                        setSelectedKey(`${item.collection}/${item.id}`);
-                        setCopyStatus('');
-                      }}
+                      onClick={() => openItem(item)}
                     >
                       {titleOf(item)}
                     </button>

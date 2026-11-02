@@ -106,6 +106,68 @@ h2 {
   color: #fff;
   font-size: 1.6rem;
 }
+.tag-report {
+  margin-bottom: 1rem;
+  border: 1px solid #35566a;
+  border-radius: 8px;
+  padding: 1rem;
+  background: #152630;
+}
+.tag-report-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+.tag-report-heading h2 {
+  margin-top: 0.25rem;
+  font-size: 1.5rem;
+}
+.tag-report-heading button {
+  min-height: 2.7rem;
+  border: 1px solid #278bc1;
+  border-radius: 5px;
+  padding: 0.55rem 1rem;
+  color: #fff;
+  background: #075f98;
+  cursor: pointer;
+}
+.tag-report-heading button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.tag-report > p {
+  color: #c7d6dd;
+}
+.tag-report-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.tag-report-groups > div {
+  min-width: 0;
+  border: 1px solid #35566a;
+  border-radius: 6px;
+  padding: 0.85rem;
+  background: #202b31;
+}
+.tag-report-groups h3 {
+  margin: 0 0 0.6rem;
+  font-family: var(--font-display);
+  font-weight: 400;
+}
+.tag-report-groups ul {
+  margin: 0;
+  padding-left: 1.3rem;
+}
+.tag-report-groups li {
+  margin: 0.45rem 0;
+  overflow-wrap: anywhere;
+}
+.tag-report-groups code {
+  color: #ffe79a;
+  white-space: pre-wrap;
+}
 .file-check-panel {
   display: flex;
   align-items: center;
@@ -444,6 +506,9 @@ h2 {
   }
 }
 @media (max-width: 620px) {
+  .tag-report-groups {
+    grid-template-columns: 1fr;
+  }
   .file-check-panel {
     align-items: stretch;
     flex-direction: column;
