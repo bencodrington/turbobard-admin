@@ -106,6 +106,44 @@ h2 {
   color: #fff;
   font-size: 1.6rem;
 }
+.file-check-panel {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+  border: 1px solid #35566a;
+  border-radius: 8px;
+  padding: 1rem;
+  background: #152630;
+}
+.file-check-panel h2 {
+  font-size: 1.5rem;
+}
+.file-check-panel p {
+  margin: 0.4rem 0 0;
+  color: #c7d6dd;
+}
+.file-check-panel button {
+  flex: none;
+  min-height: 2.7rem;
+  border: 1px solid #278bc1;
+  border-radius: 5px;
+  padding: 0.55rem 1rem;
+  color: #fff;
+  background: #075f98;
+  cursor: pointer;
+}
+.file-check-panel button:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+.file-status p {
+  margin: 0.2rem 0;
+  color: #c7d6dd;
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
+}
 .catalog-controls {
   display: grid;
   grid-template-columns: minmax(16rem, 2fr) repeat(4, minmax(8rem, 1fr));
@@ -406,6 +444,10 @@ h2 {
   }
 }
 @media (max-width: 620px) {
+  .file-check-panel {
+    align-items: stretch;
+    flex-direction: column;
+  }
   .admin-shell {
     padding: 1rem;
   }

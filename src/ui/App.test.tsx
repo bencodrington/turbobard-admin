@@ -3,6 +3,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
   within,
 } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -68,6 +69,181 @@ afterEach(() => {
 });
 
 describe('catalog browsing', () => {
+  it('refreshes the Sound catalog before a health scan', async () => {
+    let soundLoads = 0;
+    const checked: string[] = [];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), 'https://admin.example');
+        if (url.pathname === '/api/file') {
+          const name = url.searchParams.get('name')!;
+          checked.push(name);
+          return Response.json({
+            name,
+            status: 'available',
+            checkedAt: '2026-11-02T12:30:00Z',
+          });
+        }
+        const isSound = url.searchParams.get('collection') === 'tracks';
+        if (isSound) soundLoads++;
+        const fileName = soundLoads === 1 ? 'old' : 'new';
+        return Response.json({
+          items: isSound
+            ? [
+                {
+                  ...record(fileName, { name: fileName, tags: [], fileName }),
+                  collection: 'tracks',
+                },
+              ]
+            : [],
+          nextPageToken: null,
+          complete: true,
+          scannedAt: '2026-11-02T12:00:00Z',
+        });
+      }),
+    );
+    render(<App />);
+    expect(
+      await screen.findByRole('button', { name: 'old' }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Check referenced files' }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByText(/2 of 2 file checks complete/i),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: 'new' })).toBeInTheDocument();
+    expect(checked).toEqual(['new.mp3', 'new.webm']);
+  });
+  it('reports an incomplete health scan when catalog pagination fails', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), 'https://admin.example');
+        if (url.pathname === '/api/file')
+          return Response.json({
+            name: url.searchParams.get('name'),
+            status: 'available',
+            checkedAt: '2026-11-02T12:30:00Z',
+          });
+        if (url.searchParams.has('pageToken'))
+          return Response.json({ error: 'upstream_timeout' }, { status: 504 });
+        return Response.json({
+          items:
+            url.searchParams.get('collection') === 'tracks'
+              ? [
+                  {
+                    ...record('rain', {
+                      name: 'Rain',
+                      tags: [],
+                      fileName: 'rain',
+                    }),
+                    collection: 'tracks',
+                  },
+                  {
+                    ...record(
+                      'broken',
+                      { name: 'Broken', tags: 'bad', samples: [null] },
+                      ['Samples must be text.'],
+                    ),
+                    collection: 'tracks',
+                  },
+                ]
+              : [],
+          nextPageToken:
+            url.searchParams.get('collection') === 'tracks' ? 'more' : null,
+          complete: url.searchParams.get('collection') !== 'tracks',
+          scannedAt: '2026-11-02T12:00:00Z',
+        });
+      }),
+    );
+    render(<App />);
+    expect(
+      await screen.findByRole('button', { name: 'Rain' }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Check referenced files' }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          /2 of 2 file checks complete.*catalog scan incomplete/i,
+        ),
+      ).toBeInTheDocument(),
+    );
+    expect(screen.getByRole('button', { name: 'Broken' })).toBeInTheDocument();
+    expect(screen.getByText('Samples must be text.')).toBeInTheDocument();
+  });
+  it('checks referenced files on demand and distinguishes storage and decode failures', async () => {
+    const files: Record<string, string> = {
+      'rain.mp3': 'available',
+      'rain.webm': 'missing',
+      'horn.mp3': 'inaccessible',
+      'horn.webm': 'available',
+    };
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), 'https://admin.example');
+        if (url.pathname === '/api/file') {
+          const name = url.searchParams.get('name')!;
+          return Response.json({
+            name,
+            status: files[name],
+            checkedAt: '2026-11-02T12:30:00.000Z',
+            size: '123',
+          });
+        }
+        const tracks = [
+          record('rain', { name: 'Rain', tags: [], fileName: 'rain' }),
+          record('horn', { name: 'Horn', tags: [], samples: ['horn'] }),
+        ];
+        return Response.json({
+          items:
+            url.searchParams.get('collection') === 'tracks'
+              ? tracks.map((item) => ({ ...item, collection: 'tracks' }))
+              : [],
+          nextPageToken: null,
+          complete: true,
+          scannedAt: '2026-11-02T12:00:00.000Z',
+        });
+      }),
+    );
+
+    const { container } = render(<App />);
+    expect(
+      await screen.findByRole('button', { name: 'Rain' }),
+    ).toBeInTheDocument();
+    fireEvent.click(
+      screen.getByRole('button', { name: /check referenced files/i }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByText(/4 of 4 file checks complete/i),
+      ).toBeInTheDocument(),
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Rain' }));
+    expect(screen.getByText(/rain\.webm.*missing/i)).toBeInTheDocument();
+    const audio = container.querySelector('audio[aria-label="rain MP3"]')!;
+    Object.defineProperty(audio, 'error', {
+      configurable: true,
+      value: { code: 2 },
+    });
+    fireEvent.error(audio);
+    expect(screen.getByText(/playback unavailable/i)).toBeInTheDocument();
+    Object.defineProperty(audio, 'error', {
+      configurable: true,
+      value: { code: 3 },
+    });
+    fireEvent.error(audio);
+    expect(screen.getByText(/decode failed/i)).toBeInTheDocument();
+    fireEvent.canPlay(audio);
+    expect(screen.getByText(/ready to play/i)).toBeInTheDocument();
+    expect(screen.getByText(/rain\.mp3.*checked/i)).toBeInTheDocument();
+  });
   it('searches records and filters by type, exact tag, and author', async () => {
     mockCatalog({
       tracks: [
@@ -224,7 +400,7 @@ describe('catalog browsing', () => {
     expect(screen.getByText('4 seconds')).toBeInTheDocument();
     expect(screen.getByText('8 seconds')).toBeInTheDocument();
     expect(screen.getByText(/"extraField": \{/)).toBeInTheDocument();
-    expect(container.querySelectorAll('audio')).toHaveLength(2);
+    expect(container.querySelectorAll('audio')).toHaveLength(4);
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
@@ -247,6 +423,6 @@ describe('catalog browsing', () => {
     );
     expect(screen.getByRole('dialog')).toHaveTextContent('Sounds in this Pack');
     expect(screen.getByText(/Volume: 0.7/)).toBeInTheDocument();
-    expect(container.querySelectorAll('audio')).toHaveLength(2);
+    expect(container.querySelectorAll('audio')).toHaveLength(4);
   });
 });

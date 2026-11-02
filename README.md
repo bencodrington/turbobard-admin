@@ -37,8 +37,9 @@ buy a domain or add a DNS zone.
 
 - Have access to the Cloudflare account that will own this Worker.
 - Know the email address that should be the only admin user.
-- For catalog data, have a Google service account whose permissions are
-  limited to reading Firestore documents. Cloudflare Access controls who can
+- For catalog and referenced-file checks, have a Google service account whose
+  permissions are limited to reading Firestore documents and Cloud Storage
+  object metadata in the `turbo-bard.appspot.com` bucket. Cloudflare Access controls who can
   open the admin app; Google IAM controls what the Worker can read. They are
   two separate checks.
 
@@ -77,7 +78,7 @@ supported email sign-in method. Then protect the Worker:
 Access denies people who do not match an Allow policy. Use the one owner's exact
 email; do not choose a whole email domain or an everyone option. Worker-level
 Access protects the web pages and API paths such as `/api/health` and
-`/api/catalog`.
+`/api/catalog` and `/api/file`.
 
 ### 3. Add the Google settings the API needs
 
@@ -114,7 +115,12 @@ Then sign in as the allowed owner and open the admin page. The API health
 response should report `"integrationConfigured": true` without revealing any
 credential values. If it reports `false`, check that all three Worker settings
 were added with the exact names above. Catalog reads also require the Google
-service account to have Firestore read permission.
+service account to have Firestore read permission. Referenced-file checks also
+require `storage.objects.get` for the `turbo-bard.appspot.com` bucket. The
+dashboard checks both MP3 and WebM object metadata; playback checks happen only
+when you audition an individual file. Neither check establishes that the audio
+content is correct. A failed or partial catalog load leaves the health scan
+incomplete.
 
 For future code updates, run `npm run deploy` again. It updates the same Worker;
 there is no staging/production choice. The owner-only Access policy stays in
