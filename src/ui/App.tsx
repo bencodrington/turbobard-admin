@@ -19,6 +19,28 @@ interface CollectionState {
 
 type ItemType = 'loop' | 'one-shot' | 'pack' | 'unknown';
 
+const AUDIO_BASE = 'https://storage.googleapis.com/turbo-bard.appspot.com';
+
+function audioUrl(fileName: string): string {
+  return `${AUDIO_BASE}/${encodeURIComponent(fileName)}.mp3`;
+}
+
+/* eslint-disable jsx-a11y/media-has-caption -- Catalog entries are sound effects without speech; the label identifies each audition. */
+function AudioPreview({
+  fileName,
+  label,
+}: {
+  fileName: string;
+  label: string;
+}) {
+  return (
+    <audio aria-label={label} controls preload="none" src={audioUrl(fileName)}>
+      Audio playback is not supported by this browser.
+    </audio>
+  );
+}
+/* eslint-enable jsx-a11y/media-has-caption */
+
 const emptyCollection = (): CollectionState => ({
   items: [],
   nextPageToken: null,
@@ -42,6 +64,25 @@ function authorOf(item: CatalogItem): string {
   if (!source || typeof source !== 'object' || Array.isArray(source)) return '';
   const author = (source as Record<string, unknown>).author;
   return typeof author === 'string' ? author : '';
+}
+
+function sourceUrlsOf(item: CatalogItem): unknown[] {
+  const source = item.fields.source;
+  if (!source || typeof source !== 'object' || Array.isArray(source)) return [];
+  const urls = (source as Record<string, unknown>).urls;
+  return Array.isArray(urls) ? urls : urls === undefined ? [] : [urls];
+}
+
+function safeExternalUrl(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:'
+      ? url.href
+      : null;
+  } catch {
+    return null;
+  }
 }
 
 function tagsOf(item: CatalogItem): string[] {
@@ -105,6 +146,19 @@ function warningsForItem(
   return warnings;
 }
 
+function packReferencesSound(pack: CatalogItem, soundId: string): boolean {
+  return (
+    Array.isArray(pack.fields.tracks) &&
+    pack.fields.tracks.some(
+      (member) =>
+        member &&
+        typeof member === 'object' &&
+        !Array.isArray(member) &&
+        (member as Record<string, unknown>).id === soundId,
+    )
+  );
+}
+
 async function loadCollectionPage(
   collection: CatalogCollection,
   pageToken?: string | null,
@@ -134,6 +188,8 @@ export default function App() {
   const [tag, setTag] = useState('');
   const [author, setAuthor] = useState('');
   const [problemFilter, setProblemFilter] = useState('all');
+  const [selectedKey, setSelectedKey] = useState<string | null>(null);
+  const [copyStatus, setCopyStatus] = useState('');
 
   async function loadCollection(collection: CatalogCollection, resume = false) {
     const current = collections[collection];
@@ -215,6 +271,25 @@ export default function App() {
       matchesProblems
     );
   });
+  const selectedItem =
+    allItems.find((item) => `${item.collection}/${item.id}` === selectedKey) ??
+    null;
+  const selectedJson = selectedItem
+    ? JSON.stringify(
+        {
+          document: {
+            id: selectedItem.id,
+            collection: selectedItem.collection,
+          },
+          fields: selectedItem.fields,
+        },
+        null,
+        2,
+      )
+    : '';
+  const selectedAttributionUrls = selectedItem
+    ? sourceUrlsOf(selectedItem)
+    : [];
   const loading = collections.tracks.loading || collections.packs.loading;
   const hasErrors = Boolean(
     collections.tracks.error || collections.packs.error,
@@ -361,7 +436,16 @@ export default function App() {
               return (
                 <tr key={`${item.collection}/${item.id}`}>
                   <td>
-                    <strong>{titleOf(item)}</strong>
+                    <button
+                      type="button"
+                      className="inspect-link"
+                      onClick={() => {
+                        setSelectedKey(`${item.collection}/${item.id}`);
+                        setCopyStatus('');
+                      }}
+                    >
+                      {titleOf(item)}
+                    </button>
                     {warnings.length > 0 && (
                       <ul
                         className="record-warnings"
@@ -424,6 +508,324 @@ export default function App() {
             </button>
           </div>
         ) : null,
+      )}
+
+      {selectedItem && (
+        <div className="detail-backdrop">
+          <button
+            type="button"
+            className="detail-dismiss"
+            aria-label="Close details"
+            onClick={() => setSelectedKey(null)}
+          />
+          <section
+            className="detail-panel"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="detail-title"
+          >
+            <header className="detail-header">
+              <div>
+                <p className="eyebrow">{typeLabel(itemType(selectedItem))}</p>
+                <h2 id="detail-title">{titleOf(selectedItem)}</h2>
+              </div>
+              <button
+                type="button"
+                className="close-detail"
+                onClick={() => setSelectedKey(null)}
+                aria-label="Close details"
+              >
+                ×
+              </button>
+            </header>
+            <dl className="metadata-grid">
+              <div>
+                <dt>Document ID</dt>
+                <dd className="id-cell">{selectedItem.id}</dd>
+              </div>
+              <div>
+                <dt>Author</dt>
+                <dd>{authorOf(selectedItem) || '—'}</dd>
+              </div>
+              <div>
+                <dt>Attribution URLs</dt>
+                <dd>
+                  {selectedAttributionUrls.length > 0
+                    ? selectedAttributionUrls.map((value, index) => {
+                        const label =
+                          typeof value === 'string'
+                            ? value
+                            : (JSON.stringify(value) ?? String(value));
+                        const href = safeExternalUrl(value);
+                        return href ? (
+                          <span key={`${label}-${index}`}>
+                            {index > 0 ? ', ' : ''}
+                            <a href={href} target="_blank" rel="noreferrer">
+                              {label}
+                            </a>
+                          </span>
+                        ) : (
+                          <span key={`${label}-${index}`}>
+                            {index > 0 ? ', ' : ''}
+                            {label}
+                          </span>
+                        );
+                      })
+                    : '—'}
+                </dd>
+              </div>
+              <div>
+                <dt>Tags</dt>
+                <dd>
+                  {tagsOf(selectedItem).length
+                    ? tagsOf(selectedItem).join(', ')
+                    : '—'}
+                </dd>
+              </div>
+              {typeof selectedItem.fields.minSecondsBetween === 'number' && (
+                <div>
+                  <dt>Minimum interval</dt>
+                  <dd>{selectedItem.fields.minSecondsBetween} seconds</dd>
+                </div>
+              )}
+              {typeof selectedItem.fields.maxSecondsBetween === 'number' && (
+                <div>
+                  <dt>Maximum interval</dt>
+                  <dd>{selectedItem.fields.maxSecondsBetween} seconds</dd>
+                </div>
+              )}
+              {typeof selectedItem.fields.fileName === 'string' && (
+                <div>
+                  <dt>Filename</dt>
+                  <dd>{selectedItem.fields.fileName}</dd>
+                </div>
+              )}
+              {Array.isArray(selectedItem.fields.samples) && (
+                <div>
+                  <dt>Variations</dt>
+                  <dd>
+                    {
+                      selectedItem.fields.samples.filter(
+                        (sample) => typeof sample === 'string',
+                      ).length
+                    }
+                  </dd>
+                </div>
+              )}
+            </dl>
+
+            {warningsForItem(selectedItem, collections).length > 0 && (
+              <section
+                className="detail-section"
+                aria-label="Validation warnings"
+              >
+                <h3>Validation warnings</h3>
+                <ul className="record-warnings">
+                  {warningsForItem(selectedItem, collections).map(
+                    (warning, index) => (
+                      <li key={`${warning}-${index}`}>{warning}</li>
+                    ),
+                  )}
+                </ul>
+              </section>
+            )}
+
+            {selectedItem.collection === 'tracks' && (
+              <section className="detail-section" aria-label="Audio files">
+                <h3>Individual playback</h3>
+                {typeof selectedItem.fields.fileName === 'string' &&
+                selectedItem.fields.fileName.trim() ? (
+                  <div className="audio-row">
+                    <span>{selectedItem.fields.fileName}</span>
+                    <AudioPreview
+                      fileName={selectedItem.fields.fileName}
+                      label={selectedItem.fields.fileName}
+                    />
+                  </div>
+                ) : null}
+                {Array.isArray(selectedItem.fields.samples) &&
+                  selectedItem.fields.samples.map((sample, index) =>
+                    typeof sample === 'string' && sample.trim() ? (
+                      <div className="audio-row" key={`${sample}-${index}`}>
+                        <span>
+                          Variation {index + 1}: {sample}
+                        </span>
+                        <AudioPreview
+                          fileName={sample}
+                          label={`Variation ${index + 1}: ${sample}`}
+                        />
+                      </div>
+                    ) : null,
+                  )}
+                {typeof selectedItem.fields.fileName !== 'string' &&
+                  !Array.isArray(selectedItem.fields.samples) && (
+                    <p className="muted">
+                      No playable filename or variation is available.
+                    </p>
+                  )}
+              </section>
+            )}
+
+            {selectedItem.collection === 'tracks' && (
+              <section className="detail-section" aria-label="Pack references">
+                <h3>Used by Packs</h3>
+                {collections.packs.error ? (
+                  <p className="muted">
+                    Pack references could not be checked because the Pack
+                    catalog failed to load.
+                  </p>
+                ) : !collections.packs.complete ? (
+                  <p className="muted">
+                    Pack references may be incomplete until all Packs have
+                    loaded.
+                  </p>
+                ) : null}
+                {collections.packs.items
+                  .filter((pack) => packReferencesSound(pack, selectedItem.id))
+                  .map((pack) => (
+                    <button
+                      type="button"
+                      className="related-entry"
+                      key={pack.id}
+                      onClick={() => setSelectedKey(`packs/${pack.id}`)}
+                    >
+                      {titleOf(pack)} <span className="id-cell">{pack.id}</span>
+                    </button>
+                  ))}
+                {collections.packs.complete &&
+                  !collections.packs.items.some((pack) =>
+                    packReferencesSound(pack, selectedItem.id),
+                  ) && <p className="muted">No Pack references found.</p>}
+              </section>
+            )}
+
+            {selectedItem.collection === 'packs' && (
+              <section className="detail-section" aria-label="Pack members">
+                <h3>Sounds in this Pack</h3>
+                {Array.isArray(selectedItem.fields.tracks) ? (
+                  selectedItem.fields.tracks.map((member, index) => {
+                    const memberData =
+                      member &&
+                      typeof member === 'object' &&
+                      !Array.isArray(member)
+                        ? (member as Record<string, unknown>)
+                        : {};
+                    const id =
+                      typeof memberData.id === 'string' ? memberData.id : '';
+                    const sound = collections.tracks.items.find(
+                      (entry) => entry.id === id,
+                    );
+                    const soundName = sound
+                      ? titleOf(sound)
+                      : id || 'Invalid Sound reference';
+                    const fileNames = sound
+                      ? typeof sound.fields.fileName === 'string'
+                        ? [sound.fields.fileName]
+                        : Array.isArray(sound.fields.samples)
+                          ? sound.fields.samples.filter(
+                              (sample): sample is string =>
+                                typeof sample === 'string',
+                            )
+                          : []
+                      : [];
+                    return (
+                      <div className="pack-member" key={`${id}-${index}`}>
+                        <div>
+                          <strong>
+                            {sound ? (
+                              <button
+                                type="button"
+                                className="inspect-link"
+                                onClick={() =>
+                                  setSelectedKey(`tracks/${sound.id}`)
+                                }
+                              >
+                                {soundName}
+                              </button>
+                            ) : (
+                              soundName
+                            )}
+                          </strong>
+                          <span className="id-cell">{id || 'No ID'}</span>
+                        </div>
+                        <span>
+                          Volume:{' '}
+                          {typeof memberData.volume === 'number'
+                            ? memberData.volume
+                            : '—'}
+                          {memberData.oneShotConfig &&
+                          typeof memberData.oneShotConfig === 'object' &&
+                          typeof (
+                            memberData.oneShotConfig as Record<string, unknown>
+                          ).minSecondsBetween === 'number'
+                            ? ` · Min interval: ${(memberData.oneShotConfig as Record<string, unknown>).minSecondsBetween} seconds`
+                            : ''}
+                          {memberData.oneShotConfig &&
+                          typeof memberData.oneShotConfig === 'object' &&
+                          typeof (
+                            memberData.oneShotConfig as Record<string, unknown>
+                          ).maxSecondsBetween === 'number'
+                            ? ` · Max interval: ${(memberData.oneShotConfig as Record<string, unknown>).maxSecondsBetween} seconds`
+                            : ''}
+                        </span>
+                        {fileNames.map((fileName, audioIndex) => (
+                          <div
+                            className="audio-row"
+                            key={`${fileName}-${audioIndex}`}
+                          >
+                            <span>
+                              {fileNames.length > 1
+                                ? `Variation ${audioIndex + 1}: `
+                                : ''}
+                              {fileName}
+                            </span>
+                            <AudioPreview
+                              fileName={fileName}
+                              label={`${soundName}: ${fileName}`}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <p className="muted">
+                    Pack members are malformed or unavailable.
+                  </p>
+                )}
+                {!collections.tracks.complete && (
+                  <p className="muted">
+                    Sound lookup may be incomplete until all Sounds have loaded.
+                  </p>
+                )}
+              </section>
+            )}
+
+            <section
+              className="detail-section json-section"
+              aria-label="Read-only catalog JSON"
+            >
+              <div className="section-heading">
+                <h3>Catalog JSON</h3>
+                <button
+                  type="button"
+                  onClick={() => {
+                    void navigator.clipboard
+                      .writeText(selectedJson)
+                      .then(() => setCopyStatus('JSON copied.'))
+                      .catch(() => setCopyStatus('Could not copy JSON.'));
+                  }}
+                >
+                  Copy JSON
+                </button>
+              </div>
+              <pre>{selectedJson}</pre>
+              <span role="status" className="muted">
+                {copyStatus}
+              </span>
+            </section>
+          </section>
+        </div>
       )}
     </main>
   );
