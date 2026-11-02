@@ -48,12 +48,12 @@ secret and never in `VITE_*`, static assets, logs, or API responses. If a
 reviewed library cannot run safely, move the API to a supported Google runtime
 (such as Cloud Run) and retain Cloudflare Access in front of it.
 
-Cloudflare Access should protect the exact staging and production admin
-hostnames, with one allow policy for the owner's identity and default-deny
-behavior. Apply the policy to each entire hostname (no path restriction), so
-`/api/*` and static pages share the same gate. Keep Workers dev and preview URLs
-disabled. No host, identity provider, owner email, or account identifier was
-available to configure or verify here.
+Cloudflare Access should protect the single admin Worker with one allow policy
+for the owner's identity and default-deny behavior. Apply the policy to all
+traffic, so `/api/*` and static pages on its `workers.dev` URL share the same
+gate. Keep preview URLs disabled. Configure the Access policy in the Cloudflare
+Dashboard rather than this repository. No identity provider, owner email, or
+account identifier is recorded here.
 
 ### Least privilege
 
@@ -156,7 +156,6 @@ unresolvable Pack member. Keep malformed rows inspectable and attach warnings.
 - [Cloudflare Workers Web Crypto support](https://developers.cloudflare.com/workers/runtime-apis/web-crypto/)
 - [Cloudflare Workers limits](https://developers.cloudflare.com/workers/platform/limits/)
 - [Cloudflare Access self-hosted apps](https://developers.cloudflare.com/cloudflare-one/access-controls/applications/http-apps/self-hosted-public-app/)
-- Cloudflare Access Terraform applications and policies: `infra/cloudflare/access.tf`.
 - [Firebase Admin SDK setup and supported Node versions](https://firebase.google.com/docs/admin/setup)
 - [Google service-account OAuth 2.0](https://developers.google.com/identity/protocols/oauth2/service-account)
 - [Firestore documents.list REST reference](https://firebase.google.com/docs/firestore/reference/rest/v1/projects.databases.documents/list)

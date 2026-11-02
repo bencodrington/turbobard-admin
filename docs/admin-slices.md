@@ -9,8 +9,9 @@ Requirements and source findings are in [the interview record](admin-design.md);
 
 ## Constraints applying to every slice
 
-- Separate project and deployment; inherit Turbobard's stack, applicable agent
-  instructions, charcoal/blue theme, Alegreya Sans and Germania One typography.
+- Separate project with one Cloudflare Worker deployment; inherit Turbobard's
+  stack, applicable agent instructions, charcoal/blue theme, Alegreya Sans and
+  Germania One typography.
 - Desktop, single-owner access; credentials stay server-side.
 - Keep the Turbobard database schema unchanged until legacy-player retirement.
   Careful, reviewed content corrections remain in scope for both players.
@@ -32,7 +33,7 @@ Verification should use representative fixtures without changing production.
 
 | ID | Slice | Kind | Depends on | Reviewable result |
 | --- | --- | --- | --- | --- |
-| R1 | Private admin foundation | Implement directly | — | Inherited React/TypeScript/Vite foundation, theme/fonts, agent guidance, verification tooling, and separate Cloudflare/Access deployment configuration. Owner-only access covers API routes as well as UI. |
+| R1 | Private admin foundation | Implement directly | — | Inherited React/TypeScript/Vite foundation, theme/fonts, agent guidance, verification tooling, and one Cloudflare Worker deployment on its free `workers.dev` URL. Set up the owner-only Access policy in the Cloudflare Dashboard; apply Access to UI and API routes. |
 | R2 | Read-only integration feasibility | Research | — | Establish supported server runtime/authentication, least-privilege Firestore/storage access, complete enumeration, scan limits, and required playback formats for both players. Compare deployed behavior with local source when authorized access is available; record gaps and a viable API contract. No writes or credential exposure. |
 | R3 | Complete catalog browsing | Implement after research | R1, R2 | Private read-only API and UI list all Sounds/Packs, including malformed records. Search name, tags, author, ID, filename; filter by type, exact tags, author, and problems. Show load failures/incompleteness explicitly. |
 | R4 | Sound/Pack inspection and audition | Implement directly | R3 | Friendly metadata, full copyable read-only JSON with unknown fields, validation warnings, Sound-to-Pack references, and individual playback including each One-shot variation. Keep failed records inspectable. |
